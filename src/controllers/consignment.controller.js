@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { AppError } from '../middleware/error.middleware.js';
+import { createInternalNotification } from './notification.controller.js';
 
 // GET /api/consignment/customers
 export const getConsignmentCustomers = async (req, res, next) => {
@@ -189,7 +190,16 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
             data: { invoiced: true, invoiceId: invoice.id }
         });
 
-        console.log(`[Consignment] Generated invoice ${nextNum} from ${visits.length} visits`);
+        // Create Notification
+        await createInternalNotification({
+            userId: req.user.id,
+            type: 'INVOICE_CREATED',
+            title: 'Consignment invoice',
+            body: `${invoice.invoiceNumber} · Generated from ${visits.length} visits — £${total.toFixed(2)}`,
+            invoiceId: invoice.id
+        });
+
+        console.log(`[Consignment] Generated invoice ${invoice.invoiceNumber} from ${visits.length} visits`);
         res.status(201).json({ success: true, data: invoice });
     } catch (err) {
         next(err);

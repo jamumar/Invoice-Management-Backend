@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { sendInvoiceEmail } from '../lib/mailer.js';
 import { AppError } from '../middleware/error.middleware.js';
+import { createInternalNotification } from './notification.controller.js';
 
 // ─── Helper: generate invoice number ─────────────────────────────────────────
 const generateInvoiceNumber = async () => {
@@ -9,9 +10,46 @@ const generateInvoiceNumber = async () => {
     return `INV-${year}-${String(count + 1).padStart(3, '0')}`;
 };
 
+// ─── Helper: check for overdue invoices and create notifications ─────────────
+const checkAndNotifyOverdueInvoices = async (userId) => {
+    try {
+        const now = new Date();
+        const overdueInvoices = await prisma.invoice.findMany({
+            where: {
+                userId,
+                status: 'OUTSTANDING',
+                dueDate: { lt: now }
+            },
+            include: { customer: true }
+        });
+
+        for (const inv of overdueInvoices) {
+            // Update status to OVERDUE
+            await prisma.invoice.update({
+                where: { id: inv.id },
+                data: { status: 'OVERDUE' }
+            });
+
+            // Create Notification
+            await createInternalNotification({
+                userId,
+                type: 'INVOICE_OVERDUE',
+                title: 'Invoice overdue',
+                body: `${inv.invoiceNumber} · ${inv.customer.companyName} — £${inv.total.toFixed(2)}`,
+                invoiceId: inv.id
+            });
+
+            console.log(`[Notification] Overdue notification created for ${inv.invoiceNumber}`);
+        }
+    } catch (err) {
+        console.error('[Notification] Error checking overdue invoices:', err);
+    }
+};
+
 // GET /api/invoices
 export const getInvoices = async (req, res, next) => {
     try {
+        await checkAndNotifyOverdueInvoices(req.user.id);
         const { status } = req.query;
         const invoices = await prisma.invoice.findMany({
             where: {
@@ -132,6 +170,15 @@ export const createInvoice = async (req, res, next) => {
             console.log(`[Inventory] Deducted stock for ${stockUpdatePromises.length} products.`);
         }
 
+        // Create Notification
+        await createInternalNotification({
+            userId: req.user.id,
+            type: 'INVOICE_CREATED',
+            title: 'Invoice created',
+            body: `${invoice.invoiceNumber} · ${invoice.customer.companyName} — £${total.toFixed(2)}`,
+            invoiceId: invoice.id
+        });
+
         console.log(`[Invoices] Created: ${invoice.invoiceNumber} (Total: £${total.toFixed(2)})`);
         res.status(201).json({ success: true, data: invoice });
     } catch (err) {
@@ -157,7 +204,18 @@ export const updateInvoiceStatus = async (req, res, next) => {
                 status,
                 ...(status === 'PAID' && { paidAt: new Date() }),
             },
+            include: { customer: true }
         });
+
+        if (status === 'PAID') {
+            await createInternalNotification({
+                userId: req.user.id,
+                type: 'INVOICE_PAID',
+                title: 'Invoice paid',
+                body: `${updated.invoiceNumber} · ${updated.customer.companyName} — £${updated.total.toFixed(2)}`,
+                invoiceId: updated.id
+            });
+        }
 
         console.log(`[Invoices] Updated status of ${updated.invoiceNumber} to ${status}`);
         res.json({ success: true, data: updated });
@@ -452,6 +510,7 @@ export const getReportsAnalytics = async (req, res, next) => {
 // GET /api/invoices/analytics/summary
 export const getInvoiceAnalytics = async (req, res, next) => {
     try {
+        await checkAndNotifyOverdueInvoices(req.user.id);
         const now = new Date();
         const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 

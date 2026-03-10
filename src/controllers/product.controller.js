@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { AppError } from '../middleware/error.middleware.js';
+import { createInternalNotification } from './notification.controller.js';
 
 // GET /api/products
 export const getProducts = async (req, res, next) => {
@@ -46,6 +47,16 @@ export const createProduct = async (req, res, next) => {
             },
         });
         console.log(`[Products] Created: ${product.name} (${product.id}) with stock: ${product.stock}`);
+
+        // Create Notification
+        await createInternalNotification({
+            userId: req.user.id,
+            type: 'PRODUCT_ADDED',
+            title: 'Product added',
+            body: `"${product.name}" added to your product list.`,
+            productId: product.id
+        });
+
         res.status(201).json({ success: true, data: product });
     } catch (err) {
         next(err);

@@ -30,6 +30,25 @@ model User {
   invoices      Invoice[]
   customPrices  CustomPrice[]
   consignmentVisits ConsignmentVisit[]
+  notifications Notification[]
+}
+
+// ─── Notification ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String   // e.g., "INVOICE_CREATED", "PRODUCT_ADDED", "INVOICE_OVERDUE", "INVOICE_PAID"
+  title     String
+  body      String
+  unread    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Optional relations for linking
+  invoiceId String?
+  productId String?
 }
 
 // ─── Customer ─────────────────────────────────────────────────────────────────
