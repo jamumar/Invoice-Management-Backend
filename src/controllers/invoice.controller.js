@@ -317,3 +317,49 @@ export const deleteInvoice = async (req, res, next) => {
         next(err);
     }
 };
+// GET /api/invoices/analytics/summary
+export const getInvoiceAnalytics = async (req, res, next) => {
+    try {
+        const now = new Date();
+        const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const invoices = await prisma.invoice.findMany({
+            where: { userId: req.user.id },
+            include: { items: true }
+        });
+
+        let outstandingAmt = 0;
+        let overdueAmt = 0;
+        let paidThisMonthAmt = 0;
+
+        invoices.forEach(inv => {
+            const amount = inv.items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0);
+            const status = inv.status?.toUpperCase();
+
+            if (status === 'PAID') {
+                const paidDate = inv.paidAt || inv.updatedAt;
+                if (new Date(paidDate) >= firstDayThisMonth) {
+                    paidThisMonthAmt += amount;
+                }
+            } else if (status === 'OUTSTANDING' || status === 'OVERDUE') {
+                const effectiveStatus = new Date(inv.dueDate) < now ? 'OVERDUE' : 'OUTSTANDING';
+                if (effectiveStatus === 'OVERDUE') {
+                    overdueAmt += amount;
+                } else {
+                    outstandingAmt += amount;
+                }
+            }
+        });
+
+        res.json({
+            success: true,
+            data: {
+                outstanding: outstandingAmt,
+                overdue: overdueAmt,
+                paidThisMonth: paidThisMonthAmt
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
