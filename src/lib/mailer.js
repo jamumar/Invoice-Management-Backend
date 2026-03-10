@@ -1,6 +1,10 @@
 import nodemailer from 'nodemailer';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config();
 
 // ─── Create Transporter ─────────────────────────────────────────────────────
@@ -31,10 +35,13 @@ transporter.verify((error) => {
  * @param {Object} opts.invoice - The invoice object from Prisma
  * @param {Object} opts.user - The business owner (sender) object
  */
-export async function sendInvoiceEmail({ to, customerName, invoice, user }) {
+export async function sendInvoiceEmail({ to, customerName, invoice, user, isReminder = false }) {
     const subtotal = invoice.subtotal || 0;
     const tax = invoice.tax || 0;
     const total = invoice.total || 0;
+
+    const companyName = 'novaconsumables';
+    const companyEmail = 'accounts@novaconsumables.co.uk';
 
     const itemsHtml = invoice.items
         .map(
@@ -67,11 +74,11 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user }) {
             <!-- Header -->
             <tr>
                 <td style="background-color: #111111; padding: 32px 40px; text-align: center;">
-                    <div style="width: 48px; height: 48px; background-color: #DC2626; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-                        <span style="font-size: 20px; font-family: 'Poppins', sans-serif; font-weight: 700; color: #ffffff; line-height: 48px; text-align: center; width: 100%; display: block;">${(user.businessName || user.name || 'I').charAt(0).toUpperCase()}</span>
+                    <div style="margin-bottom: 12px;">
+                        <img src="cid:logo" alt="Logo" width="56" style="display: block; margin: 0 auto; border-radius: 14px;" />
                     </div>
-                    <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-family: 'Poppins', sans-serif; font-weight: 700;">${user.businessName || user.name}</h1>
-                    <p style="color: #b5b5b5; margin: 4px 0 0; font-size: 12px; font-family: 'Roboto', sans-serif;">${user.businessEmail || user.email}</p>
+                    <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-family: 'Poppins', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">${companyName}</h1>
+                    <p style="color: #b5b5b5; margin: 4px 0 0; font-size: 12px; font-family: 'Roboto', sans-serif;">${companyEmail}</p>
                 </td>
             </tr>
 
@@ -162,7 +169,7 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user }) {
 
                     <!-- Footer Note -->
                     <div style="border-top: 1px solid #f0f0f0; padding-top: 24px; font-size: 12px; color: #999999; font-family: 'Roboto', sans-serif; line-height: 1.6;">
-                        If you have any questions about this invoice, please don't hesitate to get in touch at <span style="color: #DC2626;">${user.businessEmail || user.email}</span> ${user.businessPhone ? `or call us on ${user.businessPhone}` : ''}.
+                        If you have any questions about this invoice, please don't hesitate to get in touch at <span style="color: #DC2626;">${companyEmail}</span>.
                     </div>
                 </td>
             </tr>
@@ -170,7 +177,7 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user }) {
             <!-- Footer -->
             <tr>
                 <td style="background-color: #f7f7f7; padding: 24px 40px; text-align: center; font-size: 11px; color: #b5b5b5; font-family: 'Roboto', sans-serif; border-top: 1px solid #e5e5e5;">
-                    ${user.businessName || user.name} ${user.businessAddress ? `· ${user.businessAddress}` : ''}
+                    ${companyName} ${user.businessAddress ? `· ${user.businessAddress}` : ''}
                 </td>
             </tr>
         </table>
@@ -180,12 +187,20 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user }) {
 
     try {
         const info = await transporter.sendMail({
-            from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+            from: `"${companyName}" <${process.env.SMTP_USER}>`,
             to,
-            subject: `Invoice ${invoice.invoiceNumber} from ${user.businessName || user.name}`,
+            cc: isReminder ? undefined : companyEmail,
+            subject: `Invoice ${invoice.invoiceNumber} from ${companyName}`,
             html,
+            attachments: [
+                {
+                    filename: 'logo.png',
+                    path: path.resolve(__dirname, '../../assets/logo.png'),
+                    cid: 'logo' // same cid value as in the html img src
+                }
+            ]
         });
-        console.log(`📧 Email sent: ${info.messageId} to ${to}`);
+        console.log(`📧 Email sent: ${info.messageId} to ${to} (CC: ${isReminder ? 'None' : companyEmail})`);
         return info;
     } catch (error) {
         console.error(`❌ Email failed to ${to}:`, error.message);

@@ -18,7 +18,7 @@ export const getInvoices = async (req, res, next) => {
                 userId: req.user.id,
                 ...(status && { status: status.toUpperCase() }),
             },
-            include: { customer: { select: { companyName: true, email: true, address: true, city: true, postcode: true } }, items: true },
+            include: { customer: { select: { companyName: true, email: true, address: true, city: true, postcode: true, isConsignment: true } }, items: true },
             orderBy: { createdAt: 'desc' },
         });
         console.log(`[Invoices] Fetching invoices for user: ${req.user.id}${status ? ` (Status: ${status})` : ''}`);
@@ -83,31 +83,53 @@ export const createInvoice = async (req, res, next) => {
             include: { customer: true, items: true },
         });
 
-        // ─── Upsert Custom Prices ──────────────────────────────────────────────
-        // If an item has a productId, we save this unitPrice as the "custom" price for this customer
-        const customPricePromises = items
-            .filter((item) => item.productId)
-            .map((item) => {
-                return prisma.customPrice.upsert({
-                    where: {
-                        customerId_productId: {
+        // ─── Upsert Custom Prices & Update Stock ───────────────────────────────
+        const customPricePromises = [];
+        const stockUpdatePromises = [];
+
+        items.forEach((item) => {
+            if (item.productId) {
+                // Prepare custom price upsert
+                customPricePromises.push(
+                    prisma.customPrice.upsert({
+                        where: {
+                            customerId_productId: {
+                                customerId,
+                                productId: item.productId,
+                            },
+                        },
+                        update: { price: parseFloat(item.unitPrice) },
+                        create: {
+                            price: parseFloat(item.unitPrice),
                             customerId,
                             productId: item.productId,
+                            userId: req.user.id,
                         },
-                    },
-                    update: { price: parseFloat(item.unitPrice) },
-                    create: {
-                        price: parseFloat(item.unitPrice),
-                        customerId,
-                        productId: item.productId,
-                        userId: req.user.id,
-                    },
-                });
-            });
+                    })
+                );
+
+                // Prepare stock deduction
+                stockUpdatePromises.push(
+                    prisma.product.update({
+                        where: { id: item.productId },
+                        data: {
+                            stock: {
+                                decrement: item.quantity
+                            }
+                        }
+                    })
+                );
+            }
+        });
 
         if (customPricePromises.length > 0) {
             await Promise.all(customPricePromises);
             console.log(`[CustomPrices] Updated ${customPricePromises.length} custom prices for customer: ${customerId}`);
+        }
+
+        if (stockUpdatePromises.length > 0) {
+            await Promise.all(stockUpdatePromises);
+            console.log(`[Inventory] Deducted stock for ${stockUpdatePromises.length} products.`);
         }
 
         console.log(`[Invoices] Created: ${invoice.invoiceNumber} (Total: £${total.toFixed(2)})`);
@@ -172,6 +194,10 @@ export const sendInvoice = async (req, res, next) => {
 };
 
 import PDFDocument from 'pdfkit';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // GET /api/invoices/:id/download
 export const downloadInvoice = async (req, res, next) => {
@@ -184,8 +210,10 @@ export const downloadInvoice = async (req, res, next) => {
         if (!invoice) return next(new AppError('Invoice not found.', 404));
 
         const doc = new PDFDocument({ margin: 50, size: 'A4' });
-        const business = req.user;
         const customer = invoice.customer;
+
+        const companyName = 'novaconsumables';
+        const companyEmail = 'accounts@novaconsumables.co.uk';
 
         // HTTP Headers for PDF
         res.setHeader('Content-Type', 'application/pdf');
@@ -195,17 +223,23 @@ export const downloadInvoice = async (req, res, next) => {
         // ─── Header Section (Premium Dark Theme) ───────────────────────────
         doc.rect(0, 0, 600, 140).fill('#111111');
 
-        // Logo (NOVA CONSUMABLES style)
-        doc.rect(50, 45, 60, 35).fill('#DC2626');
-        doc.fillColor('#FFFFFF')
-            .fontSize(18)
-            .font('Helvetica-Bold')
-            .text('NOVA', 55, 55);
+        // Logo Image
+        try {
+            const logoPath = path.resolve(__dirname, '../../assets/logo.png');
+            doc.image(logoPath, 50, 40, { width: 60 });
+        } catch (e) {
+            // Fallback to text logo if image fails
+            doc.rect(50, 45, 60, 35).fill('#DC2626');
+            doc.fillColor('#FFFFFF')
+                .fontSize(18)
+                .font('Helvetica-Bold')
+                .text('NOVA', 55, 55);
+        }
 
         doc.fillColor('#DC2626')
-            .fontSize(8)
+            .fontSize(10)
             .font('Helvetica-Bold')
-            .text('CONSUMABLES', 50, 85, { characterSpacing: 1 });
+            .text(companyName.toUpperCase(), 50, 105, { characterSpacing: 2 });
 
         // Company Address (Center)
         doc.fillColor('#B5B5B5')
@@ -216,7 +250,7 @@ export const downloadInvoice = async (req, res, next) => {
         // Company Contact (Right)
         doc.fillColor('#B5B5B5')
             .fontSize(9)
-            .text('sales@novaconsumables.co.uk\nwww.novaconsumables.co.uk', 400, 55, { align: 'right', width: 150 });
+            .text(`${companyEmail}\nwww.novaconsumables.co.uk`, 400, 55, { align: 'right', width: 150 });
 
         // ─── Billing Section ───────────────────────────────────────────────
         doc.fillColor('#111111').moveDown(8);

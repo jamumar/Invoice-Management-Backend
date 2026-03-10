@@ -170,6 +170,7 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
                 subtotal,
                 tax,
                 total,
+                isConsignment: true,
                 items: {
                     create: invoiceItems.map(i => ({
                         name: i.name,

@@ -31,13 +31,21 @@ export const getProduct = async (req, res, next) => {
 // POST /api/products
 export const createProduct = async (req, res, next) => {
     try {
-        const { productCode, name, description, unitPrice, unit } = req.body;
+        const { productCode, name, description, unitPrice, unit, stock } = req.body;
         if (!name || unitPrice === undefined) return next(new AppError('Name and unit price are required.', 400));
 
         const product = await prisma.product.create({
-            data: { productCode, name, description, unitPrice: parseFloat(unitPrice), unit: unit || 'per project', userId: req.user.id },
+            data: {
+                productCode,
+                name,
+                description,
+                unitPrice: parseFloat(unitPrice),
+                unit: unit || 'per project',
+                stock: stock !== undefined ? parseInt(stock, 10) : 0,
+                userId: req.user.id
+            },
         });
-        console.log(`[Products] Created: ${product.name} (${product.id})`);
+        console.log(`[Products] Created: ${product.name} (${product.id}) with stock: ${product.stock}`);
         res.status(201).json({ success: true, data: product });
     } catch (err) {
         next(err);
@@ -52,9 +60,10 @@ export const updateProduct = async (req, res, next) => {
 
         const data = { ...req.body };
         if (data.unitPrice !== undefined) data.unitPrice = parseFloat(data.unitPrice);
+        if (data.stock !== undefined) data.stock = parseInt(data.stock, 10);
 
         const updated = await prisma.product.update({ where: { id: req.params.id }, data });
-        console.log(`[Products] Updated: ${updated.name}`);
+        console.log(`[Products] Updated: ${updated.name} (stock: ${updated.stock})`);
         res.json({ success: true, data: updated });
     } catch (err) {
         next(err);
