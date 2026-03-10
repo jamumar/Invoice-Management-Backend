@@ -6,7 +6,7 @@ export const getProducts = async (req, res, next) => {
     try {
         const products = await prisma.product.findMany({
             where: { userId: req.user.id },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { stock: 'desc' },
         });
         console.log(`[Products] Fetching products for user: ${req.user.id}`);
         res.json({ success: true, data: products });

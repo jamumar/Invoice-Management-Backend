@@ -351,6 +351,104 @@ export const deleteInvoice = async (req, res, next) => {
         next(err);
     }
 };
+// GET /api/invoices/analytics/reports
+export const getReportsAnalytics = async (req, res, next) => {
+    try {
+        const userId = req.user.id;
+        const { month, year } = req.query;
+
+        const now = new Date();
+        const currentYear = now.getFullYear(); // Keep for revenue history
+        const currentMonth = now.getMonth(); // Keep for revenue history
+
+        const targetMonth = month ? parseInt(month) : now.getMonth();
+        const targetYear = year ? parseInt(year) : now.getFullYear();
+
+        // 1. Fetch all invoices for statistics
+        const invoices = await prisma.invoice.findMany({
+            where: { userId },
+            include: { customer: { select: { companyName: true } } },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // 2. Summary for target month
+        const firstDayTargetMonth = new Date(targetYear, targetMonth, 1);
+        const lastDayTargetMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+
+        const targetMonthInvoices = invoices.filter(inv => {
+            const invDate = new Date(inv.createdAt);
+            return invDate >= firstDayTargetMonth && invDate <= lastDayTargetMonth;
+        });
+
+        const totalInvoiced = targetMonthInvoices.reduce((sum, inv) => sum + inv.total, 0);
+        const collected = targetMonthInvoices.filter(inv => inv.status === 'PAID').reduce((sum, inv) => sum + inv.total, 0);
+        const outstanding = targetMonthInvoices.filter(inv => inv.status === 'OUTSTANDING' || inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.total, 0);
+        const overdue = targetMonthInvoices.filter(inv => inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.total, 0);
+
+        const monthName = firstDayTargetMonth.toLocaleString('en-US', { month: 'short' });
+        // 3. Monthly Revenue History (Last 12 Months)
+        const revenueHistory = [];
+        for (let i = 11; i >= 0; i--) {
+            const date = new Date(currentYear, currentMonth - i, 1);
+            const monthLabel = date.toLocaleString('en-US', { month: 'short' });
+            const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+            const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
+
+            const monthInvoices = invoices.filter(inv => {
+                const invDate = new Date(inv.createdAt);
+                return invDate >= monthStart && invDate <= monthEnd;
+            });
+
+            const paid = monthInvoices.filter(inv => inv.status === 'PAID').reduce((sum, inv) => sum + inv.total, 0);
+            const overdue = monthInvoices.filter(inv => inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.total, 0);
+            const outstanding = monthInvoices.filter(inv => inv.status === 'OUTSTANDING').reduce((sum, inv) => sum + inv.total, 0);
+
+            revenueHistory.push({
+                month: monthLabel,
+                paid: parseFloat(paid.toFixed(2)),
+                outstanding: parseFloat(outstanding.toFixed(2)),
+                overdue: parseFloat(overdue.toFixed(2))
+            });
+        }
+
+        // 4. Status Breakdown (All Time)
+        const allPaid = invoices.filter(inv => inv.status === 'PAID').reduce((sum, inv) => sum + inv.total, 0);
+        const allOutstanding = invoices.filter(inv => inv.status === 'OUTSTANDING').reduce((sum, inv) => sum + inv.total, 0);
+        const allOverdue = invoices.filter(inv => inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.total, 0);
+
+        // 5. Recent Payments
+        const recentPayments = invoices
+            .filter(inv => inv.status === 'PAID')
+            .slice(0, 5)
+            .map(inv => ({
+                id: inv.invoiceNumber,
+                customer: inv.customer?.companyName || 'Unknown',
+                amount: `£${inv.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                date: new Date(inv.paidAt || inv.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+            }));
+
+        res.json({
+            success: true,
+            data: {
+                summary: [
+                    { label: `Total Invoiced (${monthName})`, value: `£${totalInvoiced.toLocaleString()}`, sub: `${targetMonthInvoices.length} invoices total`, color: '#111111', trend: '+0%', up: true },
+                    { label: `Collected (${monthName})`, value: `£${collected.toLocaleString()}`, sub: `${targetMonthInvoices.filter(i => i.status === 'PAID').length} paid invoices`, color: '#22C55E', trend: '+0%', up: true },
+                    { label: 'Outstanding', value: `£${outstanding.toLocaleString()}`, sub: `${targetMonthInvoices.filter(i => i.status === 'OUTSTANDING').length} invoices pending`, color: '#F59E0B', trend: '-0%', up: false },
+                    { label: 'Overdue', value: `£${overdue.toLocaleString()}`, sub: `${targetMonthInvoices.filter(i => i.status === 'OVERDUE').length} invoices overdue`, color: '#EF4444', trend: '+0%', up: false },
+                ],
+                revenueHistory,
+                statusBreakdown: [
+                    { label: 'Paid', value: parseFloat(allPaid.toFixed(2)), color: '#22C55E' },
+                    { label: 'Outstanding', value: parseFloat(allOutstanding.toFixed(2)), color: '#F59E0B' },
+                    { label: 'Overdue', value: parseFloat(allOverdue.toFixed(2)), color: '#EF4444' },
+                ],
+                recentPayments
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
 // GET /api/invoices/analytics/summary
 export const getInvoiceAnalytics = async (req, res, next) => {
     try {
@@ -367,7 +465,7 @@ export const getInvoiceAnalytics = async (req, res, next) => {
         let paidThisMonthAmt = 0;
 
         invoices.forEach(inv => {
-            const amount = inv.items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0);
+            const amount = inv.total;
             const status = inv.status?.toUpperCase();
 
             if (status === 'PAID') {

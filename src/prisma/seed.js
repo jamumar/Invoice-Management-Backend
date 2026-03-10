@@ -106,7 +106,13 @@ async function seed() {
     // 4. Insert into DB inside a transaction to ensure clean slate
     try {
         await prisma.$transaction(async (tx) => {
-            // Optional: clear existing records for this user to avoid duplicates on re-run
+            // Clear existing records for this user to avoid duplicates on re-run
+            // Delete children first due to FK constraints
+            await tx.consignmentItem.deleteMany({ where: { visit: { userId: user.id } } });
+            await tx.consignmentVisit.deleteMany({ where: { userId: user.id } });
+            await tx.invoiceItem.deleteMany({ where: { invoice: { userId: user.id } } });
+            await tx.invoice.deleteMany({ where: { userId: user.id } });
+            await tx.customPrice.deleteMany({ where: { userId: user.id } });
             await tx.customer.deleteMany({ where: { userId: user.id } });
             await tx.product.deleteMany({ where: { userId: user.id } });
 
@@ -118,6 +124,70 @@ async function seed() {
             if (products.length > 0) {
                 await tx.product.createMany({ data: products });
                 console.log(`✅ Inserted ${products.length} products.`);
+            }
+
+            // 5. Generate sample invoices for reporting
+            const allCustomers = await tx.customer.findMany({ where: { userId: user.id } });
+            const allProducts = await tx.product.findMany({ where: { userId: user.id } });
+
+            if (allCustomers.length > 0 && allProducts.length > 0) {
+                console.log('Generating sample invoices...');
+                const invoices = [];
+                for (let i = 0; i < 20; i++) {
+                    const customer = allCustomers[Math.floor(Math.random() * allCustomers.length)];
+                    const productCount = Math.floor(Math.random() * 3) + 1;
+                    const items = [];
+                    let subtotal = 0;
+
+                    for (let j = 0; j < productCount; j++) {
+                        const product = allProducts[Math.floor(Math.random() * allProducts.length)];
+                        const qty = Math.floor(Math.random() * 10) + 1;
+                        const lineTotal = product.unitPrice * qty;
+                        items.push({
+                            name: product.name,
+                            description: product.description,
+                            quantity: qty,
+                            unitPrice: product.unitPrice,
+                            total: lineTotal,
+                            productId: product.id
+                        });
+                        subtotal += lineTotal;
+                    }
+
+                    const tax = subtotal * 0.2;
+                    const total = subtotal + tax;
+
+                    // Random date in last 6 months
+                    const date = new Date();
+                    date.setMonth(date.getMonth() - Math.floor(Math.random() * 6));
+                    date.setDate(Math.floor(Math.random() * 28) + 1);
+
+                    // Random status
+                    const statuses = ['PAID', 'OUTSTANDING', 'OVERDUE'];
+                    const status = statuses[Math.floor(Math.random() * statuses.length)];
+
+                    invoices.push({
+                        invoiceNumber: `INV-SEED-${String(i + 1).padStart(3, '0')}`,
+                        userId: user.id,
+                        customerId: customer.id,
+                        status,
+                        subtotal,
+                        tax,
+                        total,
+                        notes: 'Seed generated invoice',
+                        createdAt: date,
+                        issueDate: date,
+                        dueDate: new Date(date.getTime() + 14 * 24 * 60 * 60 * 1000),
+                        paidAt: status === 'PAID' ? date : null,
+                        items: { create: items }
+                    });
+                }
+
+                // Create invoices one by one because we need nested items
+                for (const inv of invoices) {
+                    await tx.invoice.create({ data: inv });
+                }
+                console.log(`✅ Generated 20 sample invoices.`);
             }
         });
         console.log('🎉 Seed completed successfully!');
