@@ -10,7 +10,8 @@
         "db:migrate": "prisma migrate dev",
         "db:generate": "prisma generate",
         "db:studio": "prisma studio",
-        "db:seed": "node src/prisma/seed.js"
+        "db:seed": "node src/prisma/seed.js",
+        "db:migrate-to-railway": "node src/prisma/migrate_to_railway.js"
     },
     "dependencies": {
         "@prisma/client": "^5.11.0",

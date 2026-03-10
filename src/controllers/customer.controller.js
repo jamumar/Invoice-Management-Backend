@@ -32,11 +32,24 @@ export const getCustomer = async (req, res, next) => {
 // POST /api/customers
 export const createCustomer = async (req, res, next) => {
     try {
-        const { companyName, contactInfo, email, phone, address, address2, city, county, postcode, paymentTerms } = req.body;
+        const { companyName, contactInfo, email, phone, address, address2, city, county, postcode, paymentTerms, isConsignment } = req.body;
         if (!companyName || !email) return next(new AppError('Company name and email are required.', 400));
 
         const customer = await prisma.customer.create({
-            data: { companyName, contactInfo, email, phone, address, address2, city, county, postcode, paymentTerms: paymentTerms || 'net_30', userId: req.user.id },
+            data: {
+                companyName,
+                contactInfo,
+                email,
+                phone,
+                address,
+                address2,
+                city,
+                county,
+                postcode,
+                paymentTerms: paymentTerms || 'net_30',
+                isConsignment: !!isConsignment,
+                userId: req.user.id
+            },
         });
         console.log(`[Customers] Created: ${customer.companyName} (${customer.id})`);
         res.status(201).json({ success: true, data: customer });
@@ -51,9 +64,12 @@ export const updateCustomer = async (req, res, next) => {
         const existing = await prisma.customer.findFirst({ where: { id: req.params.id, userId: req.user.id } });
         if (!existing) return next(new AppError('Customer not found.', 404));
 
+        const data = { ...req.body };
+        if (data.isConsignment !== undefined) data.isConsignment = !!data.isConsignment;
+
         const updated = await prisma.customer.update({
             where: { id: req.params.id },
-            data: req.body,
+            data,
         });
         console.log(`[Customers] Updated: ${updated.companyName}`);
         res.json({ success: true, data: updated });

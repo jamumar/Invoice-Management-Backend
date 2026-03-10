@@ -6,6 +6,8 @@ import authRoutes from './routes/auth.routes.js';
 import customerRoutes from './routes/customer.routes.js';
 import productRoutes from './routes/product.routes.js';
 import invoiceRoutes from './routes/invoice.routes.js';
+import consignmentRoutes from './routes/consignment.routes.js';
+import analyticsRoutes from './routes/analytics.routes.js';
 
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFound } from './middleware/notFound.middleware.js';
@@ -42,6 +44,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/invoices', invoiceRoutes);
+app.use('/api/consignment', consignmentRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // ─── Error Handling ──────────────────────────────────────────────────────────
 app.use(notFound);

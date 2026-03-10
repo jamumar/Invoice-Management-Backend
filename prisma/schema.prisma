@@ -29,6 +29,7 @@ model User {
   products      Product[]
   invoices      Invoice[]
   customPrices  CustomPrice[]
+  consignmentVisits ConsignmentVisit[]
 }
 
 // ─── Customer ─────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ model Customer {
   county       String?
   postcode     String?
   paymentTerms String   @default("net_30")
+  isConsignment Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -52,6 +54,7 @@ model Customer {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   invoices     Invoice[]
   customPrices CustomPrice[]
+  consignmentVisits ConsignmentVisit[]
 }
 
 // ─── Product / Service ────────────────────────────────────────────────────────
@@ -70,6 +73,7 @@ model Product {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   invoiceItems InvoiceItem[]
   customPrices CustomPrice[]
+  consignmentItems ConsignmentItem[]
 }
 
 // ─── Invoice ──────────────────────────────────────────────────────────────────
@@ -94,6 +98,7 @@ model Invoice {
   customerId    String
   customer      Customer      @relation(fields: [customerId], references: [id])
   items         InvoiceItem[]
+  consignmentVisits ConsignmentVisit[]
 }
 
 enum InvoiceStatus {
@@ -119,6 +124,8 @@ model InvoiceItem {
   product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 }
 
+// ─── Custom Pricing ─────────────────────────────────────────────────────────
+
 model CustomPrice {
   id         String   @id @default(uuid())
   price      Float
@@ -133,4 +140,37 @@ model CustomPrice {
   product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([customerId, productId])
+}
+
+// ─── Consignment Tracking ─────────────────────────────────────────────────────
+
+model ConsignmentVisit {
+  id         String   @id @default(uuid())
+  date       DateTime @default(now())
+  invoiced   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  items      ConsignmentItem[]
+  
+  invoiceId  String?
+  invoice    Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+}
+
+model ConsignmentItem {
+  id          String   @id @default(uuid())
+  name        String
+  quantity    Int
+  unitPrice   Float
+  total       Float
+
+  visitId     String
+  visit       ConsignmentVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 }
