@@ -1,0 +1,136 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── User / Business Owner ─────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  name          String
+  businessName  String?
+  businessEmail String?
+  businessPhone String?
+  businessAddress String?
+  logo          String?   // URL to stored logo
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  customers     Customer[]
+  products      Product[]
+  invoices      Invoice[]
+  customPrices  CustomPrice[]
+}
+
+// ─── Customer ─────────────────────────────────────────────────────────────────
+
+model Customer {
+  id           String   @id @default(uuid())
+  companyName  String
+  contactInfo  String?
+  email        String
+  phone        String?
+  address      String?
+  address2     String?
+  city         String?
+  county       String?
+  postcode     String?
+  paymentTerms String   @default("net_30")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices     Invoice[]
+  customPrices CustomPrice[]
+}
+
+// ─── Product / Service ────────────────────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(uuid())
+  productCode String
+  name        String
+  description String?
+  unitPrice   Float
+  unit        String   @default("per project")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoiceItems InvoiceItem[]
+  customPrices CustomPrice[]
+}
+
+// ─── Invoice ──────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id            String        @id @default(uuid())
+  invoiceNumber String        @unique
+  status        InvoiceStatus @default(OUTSTANDING)
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime
+  notes         String?
+  subtotal      Float
+  tax           Float         @default(0)
+  total         Float
+  paidAt        DateTime?
+  sentAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  items         InvoiceItem[]
+}
+
+enum InvoiceStatus {
+  OUTSTANDING
+  PAID
+  OVERDUE
+  DRAFT
+}
+
+// ─── Invoice Line Item ────────────────────────────────────────────────────────
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  quantity    Int
+  unitPrice   Float
+  total       Float
+
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+}
+
+model CustomPrice {
+  id         String   @id @default(uuid())
+  price      Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+}
