@@ -27,6 +27,7 @@ model User {
 
   customers     Customer[]
   products      Product[]
+  categories    Category[]
   invoices      Invoice[]
   customPrices  CustomPrice[]
   consignmentVisits ConsignmentVisit[]
@@ -76,6 +77,26 @@ model Customer {
   consignmentVisits ConsignmentVisit[]
 }
 
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  color     String?
+  bg        String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  parentId  String?
+  parent    Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryToSubcategory")
+
+  products  Product[]
+
+  @@unique([userId, name, parentId])
+}
+
 // ─── Product / Service ────────────────────────────────────────────────────────
 
 model Product {
@@ -91,6 +112,10 @@ model Product {
 
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
   invoiceItems InvoiceItem[]
   customPrices CustomPrice[]
   consignmentItems ConsignmentItem[]

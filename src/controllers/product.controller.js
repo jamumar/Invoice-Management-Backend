@@ -5,11 +5,29 @@ import { createInternalNotification } from './notification.controller.js';
 // GET /api/products
 export const getProducts = async (req, res, next) => {
     try {
+        const { categoryId } = req.query;
+        const where = { userId: req.user.id };
+
+        if (categoryId) {
+            // Support filtering by category and all its children
+            const categoryIds = [categoryId];
+            const getSubcategories = async (id) => {
+                const subs = await prisma.category.findMany({ where: { parentId: id } });
+                for (const sub of subs) {
+                    categoryIds.push(sub.id);
+                    await getSubcategories(sub.id);
+                }
+            };
+            await getSubcategories(categoryId);
+            where.categoryId = { in: categoryIds };
+        }
+
         const products = await prisma.product.findMany({
-            where: { userId: req.user.id },
+            where,
+            include: { category: true },
             orderBy: { stock: 'desc' },
         });
-        console.log(`[Products] Fetching products for user: ${req.user.id}`);
+        console.log(`[Products] Fetching products for user: ${req.user.id}${categoryId ? ` (Category: ${categoryId})` : ''}`);
         res.json({ success: true, data: products });
     } catch (err) {
         next(err);
@@ -21,6 +39,7 @@ export const getProduct = async (req, res, next) => {
     try {
         const product = await prisma.product.findFirst({
             where: { id: req.params.id, userId: req.user.id },
+            include: { category: true }
         });
         if (!product) return next(new AppError('Product not found.', 404));
         res.json({ success: true, data: product });
@@ -32,7 +51,7 @@ export const getProduct = async (req, res, next) => {
 // POST /api/products
 export const createProduct = async (req, res, next) => {
     try {
-        const { productCode, name, description, unitPrice, unit, stock } = req.body;
+        const { productCode, name, description, unitPrice, unit, stock, categoryId } = req.body;
         if (!name || unitPrice === undefined) return next(new AppError('Name and unit price are required.', 400));
 
         const product = await prisma.product.create({
@@ -43,7 +62,8 @@ export const createProduct = async (req, res, next) => {
                 unitPrice: parseFloat(unitPrice),
                 unit: unit || 'per project',
                 stock: stock !== undefined ? parseInt(stock, 10) : 0,
-                userId: req.user.id
+                userId: req.user.id,
+                categoryId: categoryId || null
             },
         });
         console.log(`[Products] Created: ${product.name} (${product.id}) with stock: ${product.stock}`);
@@ -72,8 +92,13 @@ export const updateProduct = async (req, res, next) => {
         const data = { ...req.body };
         if (data.unitPrice !== undefined) data.unitPrice = parseFloat(data.unitPrice);
         if (data.stock !== undefined) data.stock = parseInt(data.stock, 10);
+        if (data.categoryId === "") data.categoryId = null; // Allow unsetting category
 
-        const updated = await prisma.product.update({ where: { id: req.params.id }, data });
+        const updated = await prisma.product.update({
+            where: { id: req.params.id },
+            data,
+            include: { category: true }
+        });
         console.log(`[Products] Updated: ${updated.name} (stock: ${updated.stock})`);
         res.json({ success: true, data: updated });
     } catch (err) {

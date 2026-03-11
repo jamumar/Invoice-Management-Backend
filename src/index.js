@@ -9,6 +9,7 @@ import invoiceRoutes from './routes/invoice.routes.js';
 import consignmentRoutes from './routes/consignment.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import categoryRoutes from './routes/category.routes.js';
 
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFound } from './middleware/notFound.middleware.js';
@@ -44,6 +45,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/consignment', consignmentRoutes);
 app.use('/api/analytics', analyticsRoutes);
