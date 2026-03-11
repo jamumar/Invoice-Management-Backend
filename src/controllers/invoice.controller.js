@@ -429,22 +429,44 @@ export const getReportsAnalytics = async (req, res, next) => {
             orderBy: { createdAt: 'desc' }
         });
 
-        // 2. Summary for target month
+        // 2. Summary for target month & previous month for trends
         const firstDayTargetMonth = new Date(targetYear, targetMonth, 1);
         const lastDayTargetMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+
+        const firstDayPrevMonth = new Date(targetYear, targetMonth - 1, 1);
+        const lastDayPrevMonth = new Date(targetYear, targetMonth, 0, 23, 59, 59);
 
         const targetMonthInvoices = invoices.filter(inv => {
             const invDate = new Date(inv.createdAt);
             return invDate >= firstDayTargetMonth && invDate <= lastDayTargetMonth;
         });
 
+        const prevMonthInvoices = invoices.filter(inv => {
+            const invDate = new Date(inv.createdAt);
+            return invDate >= firstDayPrevMonth && invDate <= lastDayPrevMonth;
+        });
+
+        const calcTrend = (curr, prev) => {
+            if (prev === 0) return curr > 0 ? '+100%' : '+0%';
+            const diff = ((curr - prev) / prev) * 100;
+            return (diff >= 0 ? '+' : '') + diff.toFixed(0) + '%';
+        };
+
         const totalInvoiced = targetMonthInvoices.reduce((sum, inv) => sum + inv.total, 0);
+        const prevTotalInvoiced = prevMonthInvoices.reduce((sum, inv) => sum + inv.total, 0);
+
         const collected = targetMonthInvoices.filter(inv => inv.status === 'PAID').reduce((sum, inv) => sum + inv.total, 0);
+        const prevCollected = prevMonthInvoices.filter(inv => inv.status === 'PAID').reduce((sum, inv) => sum + inv.total, 0);
+
         const outstanding = targetMonthInvoices.filter(inv => inv.status === 'OUTSTANDING' || inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.total, 0);
+        const prevOutstanding = prevMonthInvoices.filter(inv => inv.status === 'OUTSTANDING' || inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.total, 0);
+
         const overdue = targetMonthInvoices.filter(inv => inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.total, 0);
+        const prevOverdue = prevMonthInvoices.filter(inv => inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.total, 0);
 
         const monthName = firstDayTargetMonth.toLocaleString('en-US', { month: 'short' });
-        // 3. Monthly Revenue History (Last 12 Months)
+
+        // ... (revenueHistory, statusBreakdown, recentPayments logic remains same)
         const revenueHistory = [];
         for (let i = 11; i >= 0; i--) {
             const date = new Date(currentYear, currentMonth - i, 1);
@@ -469,12 +491,10 @@ export const getReportsAnalytics = async (req, res, next) => {
             });
         }
 
-        // 4. Status Breakdown (All Time)
         const allPaid = invoices.filter(inv => inv.status === 'PAID').reduce((sum, inv) => sum + inv.total, 0);
         const allOutstanding = invoices.filter(inv => inv.status === 'OUTSTANDING').reduce((sum, inv) => sum + inv.total, 0);
         const allOverdue = invoices.filter(inv => inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.total, 0);
 
-        // 5. Recent Payments
         const recentPayments = invoices
             .filter(inv => inv.status === 'PAID')
             .slice(0, 5)
@@ -489,10 +509,10 @@ export const getReportsAnalytics = async (req, res, next) => {
             success: true,
             data: {
                 summary: [
-                    { label: `Total Invoiced (${monthName})`, value: `£${totalInvoiced.toLocaleString()}`, sub: `${targetMonthInvoices.length} invoices total`, color: '#111111', trend: '+0%', up: true },
-                    { label: `Collected (${monthName})`, value: `£${collected.toLocaleString()}`, sub: `${targetMonthInvoices.filter(i => i.status === 'PAID').length} paid invoices`, color: '#22C55E', trend: '+0%', up: true },
-                    { label: 'Outstanding', value: `£${outstanding.toLocaleString()}`, sub: `${targetMonthInvoices.filter(i => i.status === 'OUTSTANDING').length} invoices pending`, color: '#F59E0B', trend: '-0%', up: false },
-                    { label: 'Overdue', value: `£${overdue.toLocaleString()}`, sub: `${targetMonthInvoices.filter(i => i.status === 'OVERDUE').length} invoices overdue`, color: '#EF4444', trend: '+0%', up: false },
+                    { label: `Total Invoiced (${monthName})`, value: `£${totalInvoiced.toLocaleString()}`, sub: `${targetMonthInvoices.length} invoices total`, color: '#111111', trend: calcTrend(totalInvoiced, prevTotalInvoiced), up: totalInvoiced >= prevTotalInvoiced },
+                    { label: `Collected (${monthName})`, value: `£${collected.toLocaleString()}`, sub: `${targetMonthInvoices.filter(i => i.status === 'PAID').length} paid invoices`, color: '#22C55E', trend: calcTrend(collected, prevCollected), up: collected >= prevCollected },
+                    { label: 'Outstanding', value: `£${outstanding.toLocaleString()}`, sub: `${targetMonthInvoices.filter(i => i.status === 'OUTSTANDING').length} invoices pending`, color: '#F59E0B', trend: calcTrend(outstanding, prevOutstanding), up: outstanding >= prevOutstanding },
+                    { label: 'Overdue', value: `£${overdue.toLocaleString()}`, sub: `${targetMonthInvoices.filter(i => i.status === 'OVERDUE').length} invoices overdue`, color: '#EF4444', trend: calcTrend(overdue, prevOverdue), up: overdue < prevOverdue },
                 ],
                 revenueHistory,
                 statusBreakdown: [
@@ -513,6 +533,10 @@ export const getInvoiceAnalytics = async (req, res, next) => {
         await checkAndNotifyOverdueInvoices(req.user.id);
         const now = new Date();
         const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastDayThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
         const invoices = await prisma.invoice.findMany({
             where: { userId: req.user.id },
@@ -522,10 +546,19 @@ export const getInvoiceAnalytics = async (req, res, next) => {
         let outstandingAmt = 0;
         let overdueAmt = 0;
         let paidThisMonthAmt = 0;
+        let totalThisMonthAmt = 0;
+        let totalLastMonthAmt = 0;
 
         invoices.forEach(inv => {
             const amount = inv.total;
             const status = inv.status?.toUpperCase();
+            const invDate = new Date(inv.createdAt);
+
+            if (invDate >= firstDayThisMonth && invDate <= lastDayThisMonth) {
+                totalThisMonthAmt += amount;
+            } else if (invDate >= firstDayLastMonth && invDate <= lastDayLastMonth) {
+                totalLastMonthAmt += amount;
+            }
 
             if (status === 'PAID') {
                 const paidDate = inv.paidAt || inv.updatedAt;
@@ -542,12 +575,21 @@ export const getInvoiceAnalytics = async (req, res, next) => {
             }
         });
 
+        let revenueGrowth = 0;
+        if (totalLastMonthAmt > 0) {
+            revenueGrowth = ((totalThisMonthAmt - totalLastMonthAmt) / totalLastMonthAmt) * 100;
+        } else if (totalThisMonthAmt > 0) {
+            revenueGrowth = 100;
+        }
+
         res.json({
             success: true,
             data: {
                 outstanding: outstandingAmt,
                 overdue: overdueAmt,
-                paidThisMonth: paidThisMonthAmt
+                paidThisMonth: paidThisMonthAmt,
+                totalThisMonth: totalThisMonthAmt,
+                revenueGrowth: Math.round(revenueGrowth)
             }
         });
     } catch (err) {
