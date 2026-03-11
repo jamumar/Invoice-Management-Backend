@@ -12,6 +12,7 @@
         "db:studio": "prisma studio",
         "db:seed": "node src/prisma/seed.js",
         "db:cleanup": "node src/prisma/cleanup.js",
+        "db:create-user": "node src/prisma/create-user.js",
         "db:migrate-to-railway": "node src/prisma/migrate_to_railway.js"
     },
     "dependencies": {

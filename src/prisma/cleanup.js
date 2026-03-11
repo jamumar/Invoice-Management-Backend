@@ -9,10 +9,12 @@ async function main() {
         // Order of deletion matters to avoid foreign key constraints
         // Delete in reverse order of dependencies
         await prisma.notification.deleteMany();
+        await prisma.consignmentItem.deleteMany();
+        await prisma.consignmentVisit.deleteMany();
         await prisma.invoiceItem.deleteMany();
         await prisma.invoice.deleteMany();
+        await prisma.customPrice.deleteMany();
         await prisma.product.deleteMany();
-        await prisma.subcategory.deleteMany();
         await prisma.category.deleteMany();
         await prisma.customer.deleteMany();
         await prisma.user.deleteMany();
