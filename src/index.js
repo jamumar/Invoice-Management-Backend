@@ -20,8 +20,26 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ─── Middleware ─────────────────────────────────────────────────────────────
+const allowedOrigins = [
+    'http://localhost:5173',
+    'tauri://localhost',
+    'https://tauri.localhost',
+    process.env.FRONTEND_URL,
+    'https://invoice-management-production.up.railway.app' // Example production URL if known
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('tauri://')) {
+            callback(null, true);
+        } else {
+            console.log('CORS blocked origin:', origin);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
 }));
 app.use(express.json());
