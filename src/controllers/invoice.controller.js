@@ -433,8 +433,8 @@ export const getReportsAnalytics = async (req, res, next) => {
         const currentYear = now.getFullYear(); // Keep for revenue history
         const currentMonth = now.getMonth(); // Keep for revenue history
 
-        const targetMonth = month ? parseInt(month) : now.getMonth();
-        const targetYear = year ? parseInt(year) : now.getFullYear();
+        const targetMonth = (month !== undefined && month !== '') ? parseInt(month) : now.getMonth();
+        const targetYear = (year !== undefined && year !== '') ? parseInt(year) : now.getFullYear();
 
         // 1. Fetch all invoices for statistics
         const invoices = await prisma.invoice.findMany({
@@ -558,14 +558,17 @@ export const getInvoiceAnalytics = async (req, res, next) => {
         });
 
         let outstandingAmt = 0;
+        let outstandingCount = 0;
         let overdueAmt = 0;
+        let overdueCount = 0;
         let paidThisMonthAmt = 0;
+        let paidThisMonthCount = 0;
         let totalThisMonthAmt = 0;
         let totalLastMonthAmt = 0;
 
         invoices.forEach(inv => {
             const amount = inv.total;
-            const status = inv.status?.toUpperCase();
+            const status = (inv.status || '').toUpperCase();
             const invDate = new Date(inv.createdAt);
 
             if (invDate >= firstDayThisMonth && invDate <= lastDayThisMonth) {
@@ -578,13 +581,16 @@ export const getInvoiceAnalytics = async (req, res, next) => {
                 const paidDate = inv.paidAt || inv.updatedAt;
                 if (new Date(paidDate) >= firstDayThisMonth) {
                     paidThisMonthAmt += amount;
+                    paidThisMonthCount++;
                 }
-            } else if (status === 'OUTSTANDING' || status === 'OVERDUE') {
-                const effectiveStatus = new Date(inv.dueDate) < now ? 'OVERDUE' : 'OUTSTANDING';
-                if (effectiveStatus === 'OVERDUE') {
+            } else if (status === 'OUTSTANDING' || status === 'OVERDUE' || status === 'SENT' || status === 'UNPAID') {
+                const isOverdue = inv.dueDate && new Date(inv.dueDate) < now;
+                if (isOverdue) {
                     overdueAmt += amount;
+                    overdueCount++;
                 } else {
                     outstandingAmt += amount;
+                    outstandingCount++;
                 }
             }
         });
@@ -600,8 +606,11 @@ export const getInvoiceAnalytics = async (req, res, next) => {
             success: true,
             data: {
                 outstanding: outstandingAmt,
+                outstandingCount,
                 overdue: overdueAmt,
+                overdueCount,
                 paidThisMonth: paidThisMonthAmt,
+                paidThisMonthCount,
                 totalThisMonth: totalThisMonthAmt,
                 revenueGrowth: Math.round(revenueGrowth)
             }
