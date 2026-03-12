@@ -233,19 +233,30 @@ export const sendInvoice = async (req, res, next) => {
         });
         if (!invoice) return next(new AppError('Invoice not found.', 404));
 
-        await sendInvoiceEmail({
+        // Update status to OUTSTANDING immediately to give instant feedback
+        await prisma.invoice.update({
+            where: { id: req.params.id },
+            data: {
+                sentAt: new Date(),
+                status: 'OUTSTANDING'
+            },
+        });
+
+        // Send email in sequence but WITHOUT awaiting it in the MAIN response cycle
+        // This prevents 504 Gateway Timeouts if SMTP is slow
+        sendInvoiceEmail({
             to: invoice.customer.email,
             customerName: invoice.customer.companyName,
             invoice,
             user: req.user,
+        }).catch(err => {
+            console.error(`[Background Email Failed] Invoice ${invoice.invoiceNumber}:`, err.message);
         });
 
-        await prisma.invoice.update({
-            where: { id: req.params.id },
-            data: { sentAt: new Date(), status: 'OUTSTANDING' },
+        res.json({
+            success: true,
+            message: `Invoice send process initiated for ${invoice.customer.email}`
         });
-
-        res.json({ success: true, message: `Invoice sent to ${invoice.customer.email}` });
     } catch (err) {
         next(err);
     }
