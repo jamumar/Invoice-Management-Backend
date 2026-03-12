@@ -190,8 +190,10 @@ export const createInvoice = async (req, res, next) => {
 export const updateInvoiceStatus = async (req, res, next) => {
     try {
         const { status } = req.body;
-        const validStatuses = ['OUTSTANDING', 'PAID', 'OVERDUE', 'DRAFT'];
-        if (!validStatuses.includes(status)) {
+        const normalizedStatus = (status || '').toUpperCase();
+        const validStatuses = ['OUTSTANDING', 'PAID', 'OVERDUE', 'DRAFT', 'SENT', 'UNPAID'];
+
+        if (!validStatuses.includes(normalizedStatus)) {
             return next(new AppError(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400));
         }
 
@@ -201,8 +203,8 @@ export const updateInvoiceStatus = async (req, res, next) => {
         const updated = await prisma.invoice.update({
             where: { id: req.params.id },
             data: {
-                status,
-                ...(status === 'PAID' && { paidAt: new Date() }),
+                status: normalizedStatus,
+                ...(normalizedStatus === 'PAID' && { paidAt: new Date() }),
             },
             include: { customer: true }
         });
