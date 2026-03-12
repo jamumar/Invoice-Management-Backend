@@ -2,6 +2,12 @@ import prisma from '../lib/prisma.js';
 import { sendInvoiceEmail } from '../lib/mailer.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { createInternalNotification } from './notification.controller.js';
+import PDFDocument from 'pdfkit';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ─── Helper: generate invoice number ─────────────────────────────────────────
 const generateInvoiceNumber = async () => {
@@ -264,12 +270,6 @@ export const sendInvoice = async (req, res, next) => {
     }
 };
 
-import PDFDocument from 'pdfkit';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 // GET /api/invoices/:id/download
 export const downloadInvoice = async (req, res, next) => {
     try {
@@ -288,7 +288,8 @@ export const downloadInvoice = async (req, res, next) => {
 
         // HTTP Headers for PDF
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=Invoice_${invoice.invoiceNumber}.pdf`);
+        // Use inline so it opens in the browser, which is more reliable for email links
+        res.setHeader('Content-Disposition', `inline; filename="Invoice_${invoice.invoiceNumber}.pdf"`);
         doc.pipe(res);
 
         // ─── Header Section (Premium Dark Theme) ───────────────────────────
