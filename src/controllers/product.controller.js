@@ -89,10 +89,16 @@ export const updateProduct = async (req, res, next) => {
         const existing = await prisma.product.findFirst({ where: { id: req.params.id, userId: req.user.id } });
         if (!existing) return next(new AppError('Product not found.', 404));
 
-        const data = { ...req.body };
-        if (data.unitPrice !== undefined) data.unitPrice = parseFloat(data.unitPrice);
-        if (data.stock !== undefined) data.stock = parseInt(data.stock, 10);
-        if (data.categoryId === "") data.categoryId = null; // Allow unsetting category
+        const { productCode, name, description, unitPrice, unit, stock, categoryId } = req.body;
+
+        const data = {};
+        if (productCode !== undefined) data.productCode = productCode;
+        if (name !== undefined) data.name = name;
+        if (description !== undefined) data.description = description;
+        if (unitPrice !== undefined) data.unitPrice = parseFloat(unitPrice);
+        if (unit !== undefined) data.unit = unit;
+        if (stock !== undefined) data.stock = parseInt(stock, 10);
+        if (categoryId !== undefined) data.categoryId = categoryId === "" ? null : categoryId;
 
         const updated = await prisma.product.update({
             where: { id: req.params.id },
