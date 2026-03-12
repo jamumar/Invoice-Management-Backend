@@ -33,7 +33,9 @@ export const getCategoryTree = async (req, res, next) => {
         const categories = await prisma.category.findMany({
             where: { userId: req.user.id },
             include: {
-                children: true,
+                _count: {
+                    select: { products: true }
+                }
             },
         });
 
