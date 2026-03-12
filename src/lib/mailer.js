@@ -99,7 +99,7 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
                             </td>
                             <td width="50%" style="padding-bottom: 16px;">
                                 <p style="font-size: 10px; color: #b5b5b5; margin: 0 0 4px; font-family: 'Roboto', sans-serif; letter-spacing: 0.5px;">ISSUE DATE</p>
-                                <p style="font-size: 13px; font-family: 'Poppins', sans-serif; font-weight: 600; color: #111111; margin: 0;">${new Date(invoice.issueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                <p style="font-size: 13px; font-family: 'Poppins', sans-serif; font-weight: 600; color: #111111; margin: 0;">${new Date(invoice.issueDate || invoice.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                             </td>
                         </tr>
                         <tr>
