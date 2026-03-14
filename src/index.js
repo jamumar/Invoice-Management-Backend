@@ -24,7 +24,17 @@ const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
 
 // Initialize Socket.io
-initSocket(httpServer);
+const io = initSocket(httpServer);
+console.log('✅ Socket.io initialized with path: /socket.io/');
+
+// You can also add a debug endpoint to check Socket.io status
+app.get('/api/socket-status', (req, res) => {
+    res.json({
+        initialized: !!io,
+        path: '/socket.io/',
+        clients: io?.engine?.clientsCount || 0
+    });
+});
 
 // ─── Middleware ─────────────────────────────────────────────────────────────
 const allowedOrigins = [
