@@ -35,6 +35,19 @@ export const markAsRead = async (req, res, next) => {
     }
 };
 
+// PATCH /api/notifications/read-all
+export const markAllRead = async (req, res, next) => {
+    try {
+        await prisma.notification.updateMany({
+            where: { userId: req.user.id, unread: true },
+            data: { unread: false }
+        });
+        res.json({ success: true, message: 'All notifications marked as read' });
+    } catch (err) {
+        next(err);
+    }
+};
+
 // DELETE /api/notifications
 export const clearNotifications = async (req, res, next) => {
     try {

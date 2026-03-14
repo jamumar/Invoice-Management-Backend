@@ -10,14 +10,21 @@ import consignmentRoutes from './routes/consignment.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import categoryRoutes from './routes/category.routes.js';
-
+import bulkRoutes from './routes/bulk.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFound } from './middleware/notFound.middleware.js';
+
+import { createServer } from 'http';
+import { init as initSocket } from './lib/socket.js';
 
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
+
+// Initialize Socket.io
+initSocket(httpServer);
 
 // ─── Middleware ─────────────────────────────────────────────────────────────
 const allowedOrigins = [
@@ -68,13 +75,14 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/consignment', consignmentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/bulk', bulkRoutes);
 
 // ─── Error Handling ──────────────────────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 
 // ─── Start Server ────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📦 Environment: ${process.env.NODE_ENV}`);
 });

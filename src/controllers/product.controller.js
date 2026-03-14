@@ -1,12 +1,13 @@
 import prisma from '../lib/prisma.js';
 import { AppError } from '../middleware/error.middleware.js';
+import { getIO } from '../lib/socket.js';
 import { createInternalNotification } from './notification.controller.js';
 
 // GET /api/products
 export const getProducts = async (req, res, next) => {
     try {
         const { categoryId } = req.query;
-        const where = { userId: req.user.id };
+        const where = {};
 
         if (categoryId) {
             // Support filtering by category and all its children
@@ -38,7 +39,7 @@ export const getProducts = async (req, res, next) => {
 export const getProduct = async (req, res, next) => {
     try {
         const product = await prisma.product.findFirst({
-            where: { id: req.params.id, userId: req.user.id },
+            where: { id: req.params.id },
             include: { category: true }
         });
         if (!product) return next(new AppError('Product not found.', 404));
@@ -77,7 +78,14 @@ export const createProduct = async (req, res, next) => {
             productId: product.id
         });
 
-        res.status(201).json({ success: true, data: product });
+        // Emit socket event
+        try {
+            getIO().emit('product:created', product);
+        } catch (err) {
+            console.error('Socket emit error:', err.message);
+        }
+
+        res.status(201).json({ status: 'success', data: { product } });
     } catch (err) {
         next(err);
     }
@@ -86,7 +94,7 @@ export const createProduct = async (req, res, next) => {
 // PATCH /api/products/:id
 export const updateProduct = async (req, res, next) => {
     try {
-        const existing = await prisma.product.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+        const existing = await prisma.product.findFirst({ where: { id: req.params.id } });
         if (!existing) return next(new AppError('Product not found.', 404));
 
         const { productCode, name, description, unitPrice, unit, stock, categoryId } = req.body;
@@ -106,6 +114,12 @@ export const updateProduct = async (req, res, next) => {
             include: { category: true }
         });
         console.log(`[Products] Updated: ${updated.name} (stock: ${updated.stock})`);
+        // Emit socket event
+        try {
+            getIO().emit('product:updated', updated);
+        } catch (err) {
+            console.error('Socket emit error:', err.message);
+        }
         res.json({ success: true, data: updated });
     } catch (err) {
         next(err);
@@ -115,11 +129,17 @@ export const updateProduct = async (req, res, next) => {
 // DELETE /api/products/:id
 export const deleteProduct = async (req, res, next) => {
     try {
-        const existing = await prisma.product.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+        const existing = await prisma.product.findFirst({ where: { id: req.params.id } });
         if (!existing) return next(new AppError('Product not found.', 404));
 
         await prisma.product.delete({ where: { id: req.params.id } });
         console.log(`[Products] Deleted: ${existing.name} (${existing.id})`);
+        // Emit socket event
+        try {
+            getIO().emit('product:deleted', { id: req.params.id });
+        } catch (err) {
+            console.error('Socket emit error:', err.message);
+        }
         res.json({ success: true, message: 'Product deleted.' });
     } catch (err) {
         next(err);

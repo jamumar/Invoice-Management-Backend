@@ -5,7 +5,7 @@ import { AppError } from '../middleware/error.middleware.js';
 export const getCategories = async (req, res, next) => {
     try {
         const { parentId } = req.query;
-        const where = { userId: req.user.id };
+        const where = {};
 
         if (parentId !== 'all') {
             where.parentId = parentId || null;
@@ -31,7 +31,7 @@ export const getCategories = async (req, res, next) => {
 export const getCategoryTree = async (req, res, next) => {
     try {
         const categories = await prisma.category.findMany({
-            where: { userId: req.user.id },
+            where: {},
             include: {
                 _count: {
                     select: { products: true }
@@ -65,7 +65,7 @@ export const createCategory = async (req, res, next) => {
         // Check if parent exists and belongs to user
         if (parentId) {
             const parent = await prisma.category.findFirst({
-                where: { id: parentId, userId: req.user.id }
+                where: { id: parentId }
             });
             if (!parent) return next(new AppError('Parent category not found.', 404));
         }
@@ -94,7 +94,7 @@ export const updateCategory = async (req, res, next) => {
     try {
         const { name, parentId, color, bg } = req.body;
         const existing = await prisma.category.findFirst({
-            where: { id: req.params.id, userId: req.user.id }
+            where: { id: req.params.id }
         });
         if (!existing) return next(new AppError('Category not found.', 404));
 
@@ -122,7 +122,7 @@ export const updateCategory = async (req, res, next) => {
 export const deleteCategory = async (req, res, next) => {
     try {
         const existing = await prisma.category.findFirst({
-            where: { id: req.params.id, userId: req.user.id },
+            where: { id: req.params.id },
             include: { children: true, products: true }
         });
         if (!existing) return next(new AppError('Category not found.', 404));

@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js';
 import { sendInvoiceEmail } from '../lib/mailer.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { createInternalNotification } from './notification.controller.js';
+import { getIO } from '../lib/socket.js';
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -22,7 +23,6 @@ const checkAndNotifyOverdueInvoices = async (userId) => {
         const now = new Date();
         const overdueInvoices = await prisma.invoice.findMany({
             where: {
-                userId,
                 status: 'OUTSTANDING',
                 dueDate: { lt: now }
             },
@@ -59,7 +59,6 @@ export const getInvoices = async (req, res, next) => {
         const { status } = req.query;
         const invoices = await prisma.invoice.findMany({
             where: {
-                userId: req.user.id,
                 ...(status && { status: status.toUpperCase() }),
             },
             include: { customer: { select: { companyName: true, email: true, address: true, city: true, postcode: true, isConsignment: true } }, items: true },
@@ -76,7 +75,7 @@ export const getInvoices = async (req, res, next) => {
 export const getInvoice = async (req, res, next) => {
     try {
         const invoice = await prisma.invoice.findFirst({
-            where: { id: req.params.id, userId: req.user.id },
+            where: { id: req.params.id },
             include: { customer: true, items: true },
         });
         if (!invoice) return next(new AppError('Invoice not found.', 404));
@@ -95,7 +94,7 @@ export const createInvoice = async (req, res, next) => {
             return next(new AppError('Customer and at least one item are required.', 400));
         }
 
-        const customer = await prisma.customer.findFirst({ where: { id: customerId, userId: req.user.id } });
+        const customer = await prisma.customer.findFirst({ where: { id: customerId } });
         if (!customer) return next(new AppError('Customer not found.', 404));
 
         const invoiceItems = items.map((item) => ({
@@ -187,6 +186,11 @@ export const createInvoice = async (req, res, next) => {
 
         console.log(`[Invoices] Created: ${invoice.invoiceNumber} (Total: £${total.toFixed(2)})`);
         res.status(201).json({ success: true, data: invoice });
+        try {
+            getIO().emit('invoice:created', invoice);
+        } catch (err) {
+            console.error('Socket emit error:', err.message);
+        }
     } catch (err) {
         next(err);
     }
@@ -203,7 +207,7 @@ export const updateInvoiceStatus = async (req, res, next) => {
             return next(new AppError(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400));
         }
 
-        const existing = await prisma.invoice.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+        const existing = await prisma.invoice.findFirst({ where: { id: req.params.id } });
         if (!existing) return next(new AppError('Invoice not found.', 404));
 
         const updated = await prisma.invoice.update({
@@ -226,7 +230,17 @@ export const updateInvoiceStatus = async (req, res, next) => {
         }
 
         console.log(`[Invoices] Updated status of ${updated.invoiceNumber} to ${status}`);
-        res.json({ success: true, data: updated });
+        // Emit socket event
+        try {
+            getIO().emit('invoice:updated', updated);
+        } catch (err) {
+            console.error('Socket emit error:', err.message);
+        }
+
+        res.json({
+            success: true,
+            data: updated
+        });
     } catch (err) {
         next(err);
     }
@@ -236,7 +250,7 @@ export const updateInvoiceStatus = async (req, res, next) => {
 export const sendInvoice = async (req, res, next) => {
     try {
         const invoice = await prisma.invoice.findFirst({
-            where: { id: req.params.id, userId: req.user.id },
+            where: { id: req.params.id },
             include: { customer: true, items: true },
         });
         if (!invoice) return next(new AppError('Invoice not found.', 404));
@@ -274,7 +288,7 @@ export const sendInvoice = async (req, res, next) => {
 export const downloadInvoice = async (req, res, next) => {
     try {
         const invoice = await prisma.invoice.findFirst({
-            where: { id: req.params.id, userId: req.user.id },
+            where: { id: req.params.id },
             include: { customer: true, items: true },
         });
 
@@ -297,7 +311,7 @@ export const downloadInvoice = async (req, res, next) => {
 
         // Logo Image
         try {
-            const logoPath = path.resolve(__dirname, '../../assets/logo.png');
+            const logoPath = path.resolve(__dirname, '../../assets/logo.jpeg');
             doc.image(logoPath, 50, 40, { width: 60 });
         } catch (e) {
             // Fallback to text logo if image fails
@@ -307,11 +321,6 @@ export const downloadInvoice = async (req, res, next) => {
                 .font('Helvetica-Bold')
                 .text('NOVA', 55, 55);
         }
-
-        doc.fillColor('#DC2626')
-            .fontSize(10)
-            .font('Helvetica-Bold')
-            .text(companyName.toUpperCase(), 50, 105, { characterSpacing: 2 });
 
         // Company Address (Center)
         doc.fillColor('#B5B5B5')
@@ -414,11 +423,16 @@ export const downloadInvoice = async (req, res, next) => {
 // DELETE /api/invoices/:id
 export const deleteInvoice = async (req, res, next) => {
     try {
-        const existing = await prisma.invoice.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+        const existing = await prisma.invoice.findFirst({ where: { id: req.params.id } });
         if (!existing) return next(new AppError('Invoice not found.', 404));
 
         await prisma.invoice.delete({ where: { id: req.params.id } });
         res.json({ success: true, message: 'Invoice deleted.' });
+        try {
+            getIO().emit('invoice:deleted', req.params.id);
+        } catch (err) {
+            console.error('Socket emit error:', err.message);
+        }
     } catch (err) {
         next(err);
     }
@@ -438,7 +452,6 @@ export const getReportsAnalytics = async (req, res, next) => {
 
         // 1. Fetch all invoices for statistics
         const invoices = await prisma.invoice.findMany({
-            where: { userId },
             include: { customer: { select: { companyName: true } } },
             orderBy: { createdAt: 'desc' }
         });
@@ -553,7 +566,6 @@ export const getInvoiceAnalytics = async (req, res, next) => {
         const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
         const invoices = await prisma.invoice.findMany({
-            where: { userId: req.user.id },
             include: { items: true }
         });
 

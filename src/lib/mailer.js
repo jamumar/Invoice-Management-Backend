@@ -199,8 +199,8 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
             html,
             attachments: [
                 {
-                    filename: 'logo.png',
-                    path: path.resolve(__dirname, '../../assets/logo.png'),
+                    filename: 'logo.jpeg',
+                    path: path.resolve(__dirname, '../../assets/logo.jpeg'),
                     cid: 'logo' // same cid value as in the html img src
                 }
             ]

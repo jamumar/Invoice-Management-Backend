@@ -11,14 +11,14 @@ export const getProductAnalytics = async (req, res, next) => {
         // Fetch all invoice items for this month and last month
         const thisMonthInvoices = await prisma.invoiceItem.findMany({
             where: {
-                invoice: { userId: req.user.id, issueDate: { gte: firstDayThisMonth }, status: { not: 'DRAFT' } }
+                invoice: { issueDate: { gte: firstDayThisMonth }, status: { not: 'DRAFT' } }
             },
             include: { product: true }
         });
 
         const lastMonthInvoices = await prisma.invoiceItem.findMany({
             where: {
-                invoice: { userId: req.user.id, issueDate: { gte: firstDayLastMonth, lte: lastDayLastMonth }, status: { not: 'DRAFT' } }
+                invoice: { issueDate: { gte: firstDayLastMonth, lte: lastDayLastMonth }, status: { not: 'DRAFT' } }
             },
             include: { product: true }
         });
@@ -26,14 +26,14 @@ export const getProductAnalytics = async (req, res, next) => {
         // Fetch consignment items (only invoiced ones contribute to revenue/sales stats)
         const thisMonthConsignments = await prisma.consignmentItem.findMany({
             where: {
-                visit: { userId: req.user.id, date: { gte: firstDayThisMonth }, invoiced: true }
+                visit: { date: { gte: firstDayThisMonth }, invoiced: true }
             },
             include: { product: true }
         });
 
         const lastMonthConsignments = await prisma.consignmentItem.findMany({
             where: {
-                visit: { userId: req.user.id, date: { gte: firstDayLastMonth, lte: lastDayLastMonth }, invoiced: true }
+                visit: { date: { gte: firstDayLastMonth, lte: lastDayLastMonth }, invoiced: true }
             },
             include: { product: true }
         });

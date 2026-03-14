@@ -1,11 +1,11 @@
 import prisma from '../lib/prisma.js';
 import { AppError } from '../middleware/error.middleware.js';
+import { getIO } from '../lib/socket.js';
 
 // GET /api/customers
 export const getCustomers = async (req, res, next) => {
     try {
         const customers = await prisma.customer.findMany({
-            where: { userId: req.user.id },
             orderBy: { createdAt: 'desc' },
         });
         console.log(`[Customers] Fetching customers for user: ${req.user.id}`);
@@ -19,7 +19,7 @@ export const getCustomers = async (req, res, next) => {
 export const getCustomer = async (req, res, next) => {
     try {
         const customer = await prisma.customer.findFirst({
-            where: { id: req.params.id, userId: req.user.id },
+            where: { id: req.params.id },
             include: { invoices: { orderBy: { createdAt: 'desc' } } },
         });
         if (!customer) return next(new AppError('Customer not found.', 404));
@@ -52,7 +52,14 @@ export const createCustomer = async (req, res, next) => {
             },
         });
         console.log(`[Customers] Created: ${customer.companyName} (${customer.id})`);
-        res.status(201).json({ success: true, data: customer });
+        // Emit socket event
+        try {
+            getIO().emit('customer:created', customer);
+        } catch (err) {
+            console.error('Socket emit error:', err.message);
+        }
+
+        res.status(201).json({ status: 'success', data: { customer } });
     } catch (err) {
         next(err);
     }
@@ -61,7 +68,7 @@ export const createCustomer = async (req, res, next) => {
 // PATCH /api/customers/:id
 export const updateCustomer = async (req, res, next) => {
     try {
-        const existing = await prisma.customer.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+        const existing = await prisma.customer.findFirst({ where: { id: req.params.id } });
         if (!existing) return next(new AppError('Customer not found.', 404));
 
         const data = { ...req.body };
@@ -72,6 +79,12 @@ export const updateCustomer = async (req, res, next) => {
             data,
         });
         console.log(`[Customers] Updated: ${updated.companyName}`);
+        // Emit socket event
+        try {
+            getIO().emit('customer:updated', updated);
+        } catch (err) {
+            console.error('Socket emit error:', err.message);
+        }
         res.json({ success: true, data: updated });
     } catch (err) {
         next(err);
@@ -81,11 +94,17 @@ export const updateCustomer = async (req, res, next) => {
 // DELETE /api/customers/:id
 export const deleteCustomer = async (req, res, next) => {
     try {
-        const existing = await prisma.customer.findFirst({ where: { id: req.params.id, userId: req.user.id } });
+        const existing = await prisma.customer.findFirst({ where: { id: req.params.id } });
         if (!existing) return next(new AppError('Customer not found.', 404));
 
         await prisma.customer.delete({ where: { id: req.params.id } });
         console.log(`[Customers] Deleted: ${existing.companyName} (${existing.id})`);
+        // Emit socket event
+        try {
+            getIO().emit('customer:deleted', { id: req.params.id });
+        } catch (err) {
+            console.error('Socket emit error:', err.message);
+        }
         res.json({ success: true, message: 'Customer deleted.' });
     } catch (err) {
         next(err);
@@ -96,7 +115,7 @@ export const deleteCustomer = async (req, res, next) => {
 export const getCustomerCustomPrices = async (req, res, next) => {
     try {
         const prices = await prisma.customPrice.findMany({
-            where: { customerId: req.params.id, userId: req.user.id }
+            where: { customerId: req.params.id }
         });
         res.json({ success: true, data: prices });
     } catch (err) {

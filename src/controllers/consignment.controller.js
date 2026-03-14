@@ -6,7 +6,7 @@ import { createInternalNotification } from './notification.controller.js';
 export const getConsignmentCustomers = async (req, res, next) => {
     try {
         const customers = await prisma.customer.findMany({
-            where: { userId: req.user.id, isConsignment: true },
+            where: { isConsignment: true },
             include: {
                 consignmentVisits: {
                     include: {
@@ -149,7 +149,7 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
 
         // Get last invoice number
         const lastInvoice = await prisma.invoice.findFirst({
-            where: { userId: req.user.id },
+            where: {},
             orderBy: { createdAt: 'desc' },
         });
 
