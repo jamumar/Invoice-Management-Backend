@@ -543,6 +543,7 @@ export const deleteInvoice = async (req, res, next) => {
 export const getReportsAnalytics = async (req, res, next) => {
     try {
         const userId = req.user.id;
+        await checkAndNotifyOverdueInvoices(userId);
         const { month, year } = req.query;
 
         const now = new Date();
@@ -699,8 +700,11 @@ export const getInvoiceAnalytics = async (req, res, next) => {
                     paidThisMonthCount++;
                 }
             } else if (status === 'OUTSTANDING' || status === 'OVERDUE' || status === 'SENT' || status === 'UNPAID') {
-                const isOverdue = inv.dueDate && new Date(inv.dueDate) < now;
-                if (isOverdue) {
+                const todayForOverdue = new Date();
+                todayForOverdue.setHours(0, 0, 0, 0);
+                const isOverdueChar = inv.dueDate && new Date(inv.dueDate) < todayForOverdue;
+                
+                if (isOverdueChar) {
                     overdueAmt += amount;
                     overdueCount++;
                 } else {
