@@ -1,8 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { createServer } from 'http';
-import { init as initSocket } from './lib/socket.js';
 
 import authRoutes from './routes/auth.routes.js';
 import customerRoutes from './routes/customer.routes.js';
@@ -12,9 +10,12 @@ import consignmentRoutes from './routes/consignment.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import categoryRoutes from './routes/category.routes.js';
-
+import bulkRoutes from './routes/bulk.routes.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFound } from './middleware/notFound.middleware.js';
+
+import { createServer } from 'http';
+import { init as initSocket } from './lib/socket.js';
 
 dotenv.config();
 
@@ -23,19 +24,15 @@ const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
 
 // Initialize Socket.io
-console.log('🔧 Initializing Socket.io...');
-const io = initSocket(httpServer);
-console.log('✅ Socket.io initialized:', !!io);
+initSocket(httpServer);
 
-// ─── CORS Configuration ─────────────────────────────────────────────────────
+// ─── Middleware ─────────────────────────────────────────────────────────────
 const allowedOrigins = [
     'http://localhost:5173',
-    'http://localhost:3000',
-    'https://novaconsumables.co.uk',
-    'https://www.novaconsumables.co.uk',
     'tauri://localhost',
     'https://tauri.localhost',
-    process.env.FRONTEND_URL
+    process.env.FRONTEND_URL,
+    'https://invoice-management-production.up.railway.app' // Example production URL if known
 ].filter(Boolean);
 
 app.use(cors({
@@ -43,12 +40,6 @@ app.use(cors({
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
 
-        // Allow all localhost origins in development
-        if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
-            return callback(null, true);
-        }
-
-        // Check if the origin is in the allowed list
         if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('tauri://')) {
             callback(null, true);
         } else {
@@ -57,12 +48,7 @@ app.use(cors({
         }
     },
     credentials: true,
-    optionsSuccessStatus: 200
 }));
-
-// Handle preflight requests
-app.options('*', cors());
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -81,14 +67,6 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Invoice Management API is running ✅' });
 });
 
-app.get('/api/socket-status', (req, res) => {
-    res.json({
-        socketInitialized: !!io,
-        path: '/socket.io/',
-        clients: io?.engine?.clientsCount || 0
-    });
-});
-
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/products', productRoutes);
@@ -97,16 +75,16 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/consignment', consignmentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/bulk', bulkRoutes);
 
 // ─── Error Handling ──────────────────────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 
 // ─── Start Server ────────────────────────────────────────────────────────────
-httpServer.listen(PORT, '0.0.0.0', () => {
+httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📦 Environment: ${process.env.NODE_ENV}`);
-    console.log(`🔌 Socket.io path: /socket.io/`);
 });
 
 export default app;
