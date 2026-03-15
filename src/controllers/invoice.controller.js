@@ -21,11 +21,13 @@ const generateInvoiceNumber = async () => {
 // ─── Helper: check for overdue invoices and create notifications ─────────────
 const checkAndNotifyOverdueInvoices = async (userId) => {
     try {
-        const now = new Date();
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
         const overdueInvoices = await prisma.invoice.findMany({
             where: {
                 status: 'OUTSTANDING',
-                dueDate: { lt: now }
+                dueDate: { lt: todayStart }
             },
             include: { customer: true }
         });
