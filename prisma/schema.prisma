@@ -102,6 +102,7 @@ model Product {
 model Invoice {
   id                String             @id @default(uuid())
   invoiceNumber     String             @unique
+  purchaseOrder     String?
   status            InvoiceStatus      @default(OUTSTANDING)
   issueDate         DateTime           @default(now())
   dueDate           DateTime
@@ -111,6 +112,7 @@ model Invoice {
   total             Float
   paidAt            DateTime?
   sentAt            DateTime?
+  reminderSentAt    DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   userId            String

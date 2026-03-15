@@ -79,10 +79,9 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
             <!-- Header -->
             <tr>
                 <td style="background-color: #111111; padding: 32px 40px; text-align: center;">
-                    <div style="margin-bottom: 12px;">
+                    <div style="margin-bottom: 0;">
                         <img src="cid:logo" alt="Logo" width="56" style="display: block; margin: 0 auto; border-radius: 14px;" />
                     </div>
-                    <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-family: 'Poppins', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">${companyName}</h1>
                     <p style="color: #b5b5b5; margin: 4px 0 0; font-size: 12px; font-family: 'Roboto', sans-serif;">${companyEmail}</p>
                 </td>
             </tr>
@@ -195,7 +194,7 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
             from: `"${companyName}" <${process.env.SMTP_USER}>`,
             to,
             cc: isReminder ? undefined : companyEmail,
-            subject: `Invoice ${invoice.invoiceNumber} from ${companyName}`,
+            subject: `${isReminder ? 'PAYMENT REMINDER: ' : ''}Invoice ${invoice.invoiceNumber} from ${companyName}`,
             html,
             attachments: [
                 {

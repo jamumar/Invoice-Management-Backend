@@ -52,10 +52,69 @@ const checkAndNotifyOverdueInvoices = async (userId) => {
     }
 };
 
+// ─── Helper: check and send email reminders ──────────────────────────────────
+const checkAndSendReminders = async () => {
+    try {
+        const now = new Date();
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        // Find OUTSTANDING/OVERDUE invoices that haven't had a reminder yet
+        const invoices = await prisma.invoice.findMany({
+            where: {
+                status: { in: ['OUTSTANDING', 'OVERDUE'] },
+                reminderSentAt: null,
+                sentAt: { not: null },
+            },
+            include: { customer: true, items: true, user: true }
+        });
+
+        for (const inv of invoices) {
+            const terms = inv.customer.paymentTerms || 'net_30';
+            let shouldRemind = false;
+
+            if (terms === 'payment_in_advance') continue;
+
+            if (terms === 'due_on_receipt') {
+                // Follow up 7 days after initial send
+                if (new Date(inv.sentAt) < sevenDaysAgo) {
+                    shouldRemind = true;
+                }
+            } else {
+                // For Net 30, 14, etc - remind if past due date
+                if (new Date(inv.dueDate) < now) {
+                    shouldRemind = true;
+                }
+            }
+
+            if (shouldRemind) {
+                console.log(`[Reminders] Triggering reminder for ${inv.invoiceNumber}`);
+                
+                sendInvoiceEmail({
+                    to: inv.customer.email,
+                    customerName: inv.customer.companyName,
+                    invoice: inv,
+                    user: inv.user,
+                    isReminder: true
+                }).catch(err => {
+                    console.error(`[Reminders Failed] Invoice ${inv.invoiceNumber}:`, err.message);
+                });
+
+                await prisma.invoice.update({
+                    where: { id: inv.id },
+                    data: { reminderSentAt: new Date() }
+                });
+            }
+        }
+    } catch (err) {
+        console.error('[Reminders] Global error:', err);
+    }
+};
+
 // GET /api/invoices
 export const getInvoices = async (req, res, next) => {
     try {
         await checkAndNotifyOverdueInvoices(req.user.id);
+        await checkAndSendReminders();
         const { status } = req.query;
         const invoices = await prisma.invoice.findMany({
             where: {
@@ -88,7 +147,7 @@ export const getInvoice = async (req, res, next) => {
 // POST /api/invoices
 export const createInvoice = async (req, res, next) => {
     try {
-        const { customerId, items, dueDate, notes, tax } = req.body;
+        const { customerId, items, dueDate, notes, tax, purchaseOrder } = req.body;
 
         if (!customerId || !items || !items.length) {
             return next(new AppError('Customer and at least one item are required.', 400));
@@ -114,6 +173,7 @@ export const createInvoice = async (req, res, next) => {
         const invoice = await prisma.invoice.create({
             data: {
                 invoiceNumber,
+                purchaseOrder,
                 userId: req.user.id,
                 customerId,
                 dueDate: new Date(dueDate || Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -314,19 +374,20 @@ export const downloadInvoice = async (req, res, next) => {
             const logoPath = path.resolve(__dirname, '../../assets/logo.jpeg');
             doc.image(logoPath, 50, 40, { width: 60 });
         } catch (e) {
-            // Fallback to text logo if image fails
+            // Fallback to minimal red box if image fails (no text per user request)
             doc.rect(50, 45, 60, 35).fill('#DC2626');
-            doc.fillColor('#FFFFFF')
-                .fontSize(18)
-                .font('Helvetica-Bold')
-                .text('NOVA', 55, 55);
         }
 
         // Company Address (Center)
+        doc.fillColor('#FFFFFF')
+            .fontSize(10)
+            .font('Helvetica-Bold')
+            .text('Nova Consumables LTD', 0, 40, { align: 'center', width: 600 });
+
         doc.fillColor('#B5B5B5')
             .fontSize(9)
             .font('Helvetica')
-            .text('Unit 16 Freeland Park\nWareham Road, Poole, BH16 6FH', 0, 55, { align: 'center', width: 600 });
+            .text('Unit 16 Freeland Park\nWareham Road, Poole, BH16 6FH\nCompany Number: 14305500', 0, 55, { align: 'center', width: 600 });
 
         // Company Contact (Right)
         doc.fillColor('#B5B5B5')
@@ -356,6 +417,11 @@ export const downloadInvoice = async (req, res, next) => {
 
         doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('DUE DATE', metaX, startY + 40);
         doc.fontSize(10).fillColor('#DC2626').font('Helvetica-Bold').text(new Date(invoice.dueDate).toLocaleDateString('en-GB'), metaX + 80, startY + 40, { align: 'right', width: 70 });
+
+        if (invoice.purchaseOrder) {
+            doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('PURCHASE ORDER #', metaX, startY + 60);
+            doc.fontSize(10).fillColor('#111111').font('Helvetica-Bold').text(invoice.purchaseOrder, metaX + 80, startY + 60, { align: 'right', width: 70 });
+        }
 
         // ─── Items Table ───────────────────────────────────────────────────
         const tableTop = 280;
@@ -558,6 +624,7 @@ export const getReportsAnalytics = async (req, res, next) => {
 export const getInvoiceAnalytics = async (req, res, next) => {
     try {
         await checkAndNotifyOverdueInvoices(req.user.id);
+        await checkAndSendReminders();
         const now = new Date();
         const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const lastDayThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
