@@ -24,6 +24,7 @@ const checkAndNotifyOverdueInvoices = async (userId) => {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
 
+        // 1. Mark as OVERDUE if OUTSTANDING and dueDate is before today start
         const overdueInvoices = await prisma.invoice.findMany({
             where: {
                 status: 'OUTSTANDING',
@@ -33,13 +34,11 @@ const checkAndNotifyOverdueInvoices = async (userId) => {
         });
 
         for (const inv of overdueInvoices) {
-            // Update status to OVERDUE
             await prisma.invoice.update({
                 where: { id: inv.id },
                 data: { status: 'OVERDUE' }
             });
 
-            // Create Notification
             await createInternalNotification({
                 userId,
                 type: 'INVOICE_OVERDUE',
@@ -50,6 +49,16 @@ const checkAndNotifyOverdueInvoices = async (userId) => {
 
             console.log(`[Notification] Overdue notification created for ${inv.invoiceNumber}`);
         }
+
+        // 2. REVERT to OUTSTANDING if OVERDUE but dueDate is today or in the future
+        // This fixes records incorrectly marked by the previous buggy logic
+        await prisma.invoice.updateMany({
+            where: {
+                status: 'OVERDUE',
+                dueDate: { gte: todayStart }
+            },
+            data: { status: 'OUTSTANDING' }
+        });
     } catch (err) {
         console.error('[Notification] Error checking overdue invoices:', err);
     }
