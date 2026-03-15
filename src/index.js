@@ -64,7 +64,12 @@ app.use((req, res, next) => {
 
 // ─── Routes ─────────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', message: 'Invoice Management API is running ✅' });
+    res.json({ 
+        status: 'ok', 
+        message: 'Invoice Management API is running ✅',
+        deployedAt: '2026-03-15T11:05:00Z', // Local update timestamp
+        dataVisibility: 'UNIFIED'
+    });
 });
 
 app.use('/api/auth', authRoutes);
