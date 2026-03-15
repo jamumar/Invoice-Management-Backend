@@ -96,6 +96,14 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
 
                     <!-- Summary Box -->
                     <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f7f7f7; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                        ${invoice.purchaseOrder ? `
+                        <tr>
+                            <td colspan="2" style="padding-bottom: 16px;">
+                                <p style="font-size: 10px; color: #b5b5b5; margin: 0 0 4px; font-family: 'Roboto', sans-serif; letter-spacing: 0.5px;">PURCHASE ORDER #</p>
+                                <p style="font-size: 14px; font-family: 'Poppins', sans-serif; font-weight: 700; color: #111111; margin: 0;">${invoice.purchaseOrder}</p>
+                            </td>
+                        </tr>
+                        ` : ''}
                         <tr>
                             <td width="50%" style="padding-bottom: 16px;">
                                 <p style="font-size: 10px; color: #b5b5b5; margin: 0 0 4px; font-family: 'Roboto', sans-serif; letter-spacing: 0.5px;">INVOICE NO.</p>

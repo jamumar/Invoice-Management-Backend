@@ -174,7 +174,7 @@ export const createInvoice = async (req, res, next) => {
         const invoice = await prisma.invoice.create({
             data: {
                 invoiceNumber,
-                purchaseOrder,
+                purchaseOrder: purchaseOrder || null,
                 userId: req.user.id,
                 customerId,
                 dueDate: new Date(dueDate || Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -426,10 +426,12 @@ export const downloadInvoice = async (req, res, next) => {
         const metaX = 400;
         let currentMetaY = startY;
 
-        // Purchase Order (Always show label)
-        doc.fontSize(9).fillColor('#888888').font('Helvetica').text('Purchase Order #:', metaX, currentMetaY);
-        doc.fontSize(9).fillColor('#111111').font('Helvetica-Bold').text(invoice.purchaseOrder || '', metaX + 80, currentMetaY, { align: 'right', width: 70 });
-        currentMetaY += 18;
+        // Purchase Order (Only show if not empty)
+        if (invoice.purchaseOrder && invoice.purchaseOrder.trim() !== '') {
+            doc.fontSize(9).fillColor('#888888').font('Helvetica').text('Purchase Order #:', metaX, currentMetaY);
+            doc.fontSize(9).fillColor('#111111').font('Helvetica-Bold').text(invoice.purchaseOrder, metaX + 80, currentMetaY, { align: 'right', width: 90 });
+            currentMetaY += 18;
+        }
 
         doc.fontSize(9).fillColor('#888888').font('Helvetica').text('Invoice #:', metaX, currentMetaY);
         doc.fontSize(9).fillColor('#111111').font('Helvetica-Bold').text(invoice.invoiceNumber, metaX + 80, currentMetaY, { align: 'right', width: 70 });
