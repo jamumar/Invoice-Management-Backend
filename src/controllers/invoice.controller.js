@@ -12,9 +12,10 @@ const __dirname = path.dirname(__filename);
 
 // ─── Helper: generate invoice number ─────────────────────────────────────────
 const generateInvoiceNumber = async () => {
-    const year = new Date().getFullYear();
+    // Generate Invoice Number (Format: #001)
     const count = await prisma.invoice.count();
-    return `INV-${year}-${String(count + 1).padStart(3, '0')}`;
+    const invoiceNumber = `#${(count + 1).toString().padStart(3, '0')}`;
+    return invoiceNumber;
 };
 
 // ─── Helper: check for overdue invoices and create notifications ─────────────
@@ -409,19 +410,29 @@ export const downloadInvoice = async (req, res, next) => {
 
         // Invoice Meta (Right side)
         const metaX = 400;
-        doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('INVOICE #', metaX, startY);
-        doc.fontSize(10).fillColor('#111111').font('Helvetica-Bold').text(invoice.invoiceNumber, metaX + 80, startY, { align: 'right', width: 70 });
-
-        doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('ISSUE DATE', metaX, startY + 20);
-        doc.fontSize(10).fillColor('#111111').font('Helvetica-Bold').text(new Date(invoice.createdAt).toLocaleDateString('en-GB'), metaX + 80, startY + 20, { align: 'right', width: 70 });
-
-        doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('DUE DATE', metaX, startY + 40);
-        doc.fontSize(10).fillColor('#DC2626').font('Helvetica-Bold').text(new Date(invoice.dueDate).toLocaleDateString('en-GB'), metaX + 80, startY + 40, { align: 'right', width: 70 });
+        let currentMetaY = startY;
 
         if (invoice.purchaseOrder) {
-            doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('PURCHASE ORDER #', metaX, startY + 60);
-            doc.fontSize(10).fillColor('#111111').font('Helvetica-Bold').text(invoice.purchaseOrder, metaX + 80, startY + 60, { align: 'right', width: 70 });
+            doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('PURCHASE ORDER #', metaX, currentMetaY);
+            doc.fontSize(10).fillColor('#111111').font('Helvetica-Bold').text(invoice.purchaseOrder, metaX + 80, currentMetaY, { align: 'right', width: 70 });
+            currentMetaY += 20;
         }
+
+        doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('INVOICE #', metaX, currentMetaY);
+        doc.fontSize(10).fillColor('#111111').font('Helvetica-Bold').text(invoice.invoiceNumber, metaX + 80, currentMetaY, { align: 'right', width: 70 });
+        currentMetaY += 20;
+
+        doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('ISSUE DATE', metaX, currentMetaY);
+        doc.fontSize(10).fillColor('#111111').font('Helvetica-Bold').text(new Date(invoice.createdAt).toLocaleDateString('en-GB'), metaX + 80, currentMetaY, { align: 'right', width: 70 });
+        currentMetaY += 20;
+
+        doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('DUE DATE', metaX, currentMetaY);
+        doc.fontSize(10).fillColor('#DC2626').font('Helvetica-Bold').text(new Date(invoice.dueDate).toLocaleDateString('en-GB'), metaX + 80, currentMetaY, { align: 'right', width: 70 });
+        currentMetaY += 20;
+
+        // Add Contact field (Tony in reference image, using user name here)
+        doc.fontSize(8).fillColor('#888888').font('Helvetica-Bold').text('CONTACT', metaX, currentMetaY);
+        doc.fontSize(10).fillColor('#111111').font('Helvetica-Bold').text(invoice.user?.name || 'Tony', metaX + 80, currentMetaY, { align: 'right', width: 70 });
 
         // ─── Items Table ───────────────────────────────────────────────────
         const tableTop = 280;
