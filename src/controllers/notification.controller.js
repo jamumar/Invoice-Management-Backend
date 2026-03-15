@@ -5,7 +5,7 @@ import { AppError } from '../middleware/error.middleware.js';
 export const getNotifications = async (req, res, next) => {
     try {
         const notifications = await prisma.notification.findMany({
-            where: { userId: req.user.id },
+            where: {},
             orderBy: { createdAt: 'desc' },
             take: 50
         });
@@ -19,7 +19,7 @@ export const getNotifications = async (req, res, next) => {
 export const markAsRead = async (req, res, next) => {
     try {
         const notification = await prisma.notification.findFirst({
-            where: { id: req.params.id, userId: req.user.id }
+            where: { id: req.params.id }
         });
 
         if (!notification) return next(new AppError('Notification not found', 404));
@@ -39,7 +39,7 @@ export const markAsRead = async (req, res, next) => {
 export const markAllRead = async (req, res, next) => {
     try {
         await prisma.notification.updateMany({
-            where: { userId: req.user.id, unread: true },
+            where: { unread: true },
             data: { unread: false }
         });
         res.json({ success: true, message: 'All notifications marked as read' });
@@ -52,7 +52,7 @@ export const markAllRead = async (req, res, next) => {
 export const clearNotifications = async (req, res, next) => {
     try {
         await prisma.notification.deleteMany({
-            where: { userId: req.user.id }
+            where: {}
         });
         res.json({ success: true, message: 'Notifications cleared' });
     } catch (err) {

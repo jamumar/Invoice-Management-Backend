@@ -25,7 +25,6 @@ export const bulkUploadCustomers = async (req, res, next) => {
                         // Check if customer already exists (duplicate detection)
                         const existingCustomer = await prisma.customer.findFirst({
                             where: {
-                                userId: req.user.id,
                                 email: email
                             }
                         });
@@ -100,7 +99,6 @@ export const bulkUploadProducts = async (req, res, next) => {
                         // Check if product already exists (duplicate detection)
                         const existingProduct = await prisma.product.findFirst({
                             where: {
-                                userId: req.user.id,
                                 productCode: productCode || undefined,
                                 name: productName
                             }
@@ -116,7 +114,7 @@ export const bulkUploadProducts = async (req, res, next) => {
 
                         // Main Category
                         let mainCat = await prisma.category.findFirst({
-                            where: { userId: req.user.id, name: mainCatName, parentId: null }
+                            where: { name: mainCatName, parentId: null }
                         });
                         if (!mainCat) {
                             mainCat = await prisma.category.create({
@@ -128,7 +126,7 @@ export const bulkUploadProducts = async (req, res, next) => {
                         // Subcategory
                         if (subCatName) {
                             let subCat = await prisma.category.findFirst({
-                                where: { userId: req.user.id, name: subCatName, parentId }
+                                where: { name: subCatName, parentId }
                             });
                             if (!subCat) {
                                 subCat = await prisma.category.create({
@@ -141,7 +139,7 @@ export const bulkUploadProducts = async (req, res, next) => {
                         // Type (Level 3)
                         if (typeName) {
                             let typeCat = await prisma.category.findFirst({
-                                where: { userId: req.user.id, name: typeName, parentId }
+                                where: { name: typeName, parentId }
                             });
                             if (!typeCat) {
                                 typeCat = await prisma.category.create({

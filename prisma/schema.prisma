@@ -77,7 +77,7 @@ model Category {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   products  Product[]
 
-  @@unique([userId, name, parentId])
+  @@unique([name, parentId])
 }
 
 model Product {

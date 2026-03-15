@@ -46,7 +46,6 @@ export const getPendingVisits = async (req, res, next) => {
         const visits = await prisma.consignmentVisit.findMany({
             where: {
                 customerId: req.params.customerId,
-                userId: req.user.id,
                 invoiced: false
             },
             include: {
@@ -112,7 +111,6 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
             where: {
                 id: { in: visitIds },
                 customerId,
-                userId: req.user.id,
                 invoiced: false
             },
             include: { items: true }
