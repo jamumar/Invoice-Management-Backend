@@ -4,7 +4,8 @@ import {
     getConsignmentCustomers,
     getPendingVisits,
     logVisit,
-    generateInvoiceFromVisits
+    generateInvoiceFromVisits,
+    updateCustomerStock
 } from '../controllers/consignment.controller.js';
 
 const router = express.Router();
@@ -13,6 +14,7 @@ router.use(protect);
 
 router.get('/customers', getConsignmentCustomers);
 router.get('/customers/:customerId/pending', getPendingVisits);
+router.put('/customers/:id/stock', updateCustomerStock);
 router.post('/visit', logVisit);
 router.post('/invoice', generateInvoiceFromVisits);
 

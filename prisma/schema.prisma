@@ -57,6 +57,7 @@ model Customer {
   companyName       String
   contactInfo       String?
   isConsignment     Boolean            @default(false)
+  consignmentStock  ConsignmentStock[]
   consignmentVisits ConsignmentVisit[]
   customPrices      CustomPrice[]
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -161,6 +162,8 @@ model ConsignmentVisit {
   userId     String
   customerId String
   invoiceId  String?
+  nextVisit  String?
+  notes      String?
   items      ConsignmentItem[]
   customer   Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
   invoice    Invoice?          @relation(fields: [invoiceId], references: [id])
@@ -185,3 +188,18 @@ enum InvoiceStatus {
   OVERDUE
   DRAFT
 }
+
+model ConsignmentStock {
+  id         String   @id @default(uuid())
+  code       String
+  name       String
+  stocked    Int
+  price      Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, code])
+}
+

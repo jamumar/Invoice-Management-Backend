@@ -8,6 +8,7 @@ export const getConsignmentCustomers = async (req, res, next) => {
         const customers = await prisma.customer.findMany({
             where: { isConsignment: true },
             include: {
+                consignmentStock: true,
                 consignmentVisits: {
                     include: {
                         items: {
@@ -30,8 +31,7 @@ export const getConsignmentCustomers = async (req, res, next) => {
 
             const lastVisitDate = c.consignmentVisits[0]?.date || null;
 
-            const { consignmentVisits, ...rest } = c;
-            return { ...rest, pendingValue, pendingVisitsCount, lastVisitDate };
+            return { ...c, stockList: c.consignmentStock, pendingValue, pendingVisitsCount, lastVisitDate };
         });
 
         res.json({ success: true, data: formatted });
@@ -70,7 +70,7 @@ export const getPendingVisits = async (req, res, next) => {
 // POST /api/consignment/visits
 export const logVisit = async (req, res, next) => {
     try {
-        const { customerId, date, items } = req.body;
+        const { customerId, date, nextVisit, notes, items } = req.body;
         if (!customerId || !items || !items.length) {
             return next(new AppError('Customer ID and items are required.', 400));
         }
@@ -80,6 +80,8 @@ export const logVisit = async (req, res, next) => {
                 customerId,
                 userId: req.user.id,
                 date: new Date(date || Date.now()),
+                nextVisit: nextVisit || null,
+                notes: notes || null,
                 items: {
                     create: items.map(item => ({
                         name: item.name,
@@ -199,6 +201,38 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
 
         console.log(`[Consignment] Generated invoice ${invoice.invoiceNumber} from ${visits.length} visits`);
         res.status(201).json({ success: true, data: invoice });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// PUT /api/consignment/customers/:id/stock
+export const updateCustomerStock = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const stockList = req.body.stockList || [];
+
+        // Replace entire stock list in a transaction
+        await prisma.$transaction([
+            prisma.consignmentStock.deleteMany({
+                where: { customerId: id }
+            }),
+            prisma.consignmentStock.createMany({
+                data: stockList.map(item => ({
+                    code: item.code,
+                    name: item.name,
+                    stocked: Number(item.stocked),
+                    price: Number(item.price),
+                    customerId: id
+                }))
+            })
+        ]);
+
+        const updatedStock = await prisma.consignmentStock.findMany({
+            where: { customerId: id }
+        });
+
+        res.json({ success: true, data: updatedStock });
     } catch (err) {
         next(err);
     }
