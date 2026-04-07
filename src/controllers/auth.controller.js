@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
+import { sendPasswordResetEmail } from '../lib/mailer.js';
 import { AppError } from '../middleware/error.middleware.js';
 
 const generateToken = (id) =>
@@ -80,3 +82,36 @@ export const updateProfile = async (req, res, next) => {
         next(err);
     }
 };
+
+// POST /api/auth/forgot-password
+export const forgotPassword = async (req, res, next) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return next(new AppError('Email is required', 400));
+        }
+
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user) {
+            // Use same message for security to not leak existing emails
+            return res.json({ success: true, message: 'If an account with that email exists, we sent a password reset email.' });
+        }
+
+        // Generate an 8 character temporary password
+        const tempPassword = crypto.randomBytes(4).toString('hex');
+        const hashedPswd = await bcrypt.hash(tempPassword, 12);
+
+        await prisma.user.update({
+            where: { email },
+            data: { password: hashedPswd }
+        });
+
+        // Send email (fire and forget or await)
+        await sendPasswordResetEmail({ to: email, newPassword: tempPassword });
+
+        res.json({ success: true, message: 'If an account with that email exists, we sent a password reset email.' });
+    } catch (err) {
+        next(err);
+    }
+};
+

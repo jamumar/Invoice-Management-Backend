@@ -220,4 +220,48 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
     }
 }
 
+export async function sendPasswordResetEmail({ to, newPassword }) {
+    const companyName = 'novaconsumables';
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    </head>
+    <body style="font-family: 'Roboto', Helvetica, Arial, sans-serif; background-color: #f4f7f9; margin: 0; padding: 40px 0;">
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+            <tr>
+                <td style="padding: 32px 40px;">
+                    <p style="font-size: 16px; font-family: 'Poppins', sans-serif; font-weight: 600; color: #111111; margin-bottom: 8px;">Password Reset</p>
+                    <p style="font-size: 14px; font-family: 'Roboto', sans-serif; color: #555555; line-height: 1.6; margin-bottom: 24px;">
+                        Your password has been reset. Please use the following temporary password to log in:
+                    </p>
+                    <p style="font-size: 18px; font-family: 'Poppins', sans-serif; font-weight: 700; color: #DC2626; margin: 0;">${newPassword}</p>
+                    <p style="font-size: 14px; font-family: 'Roboto', sans-serif; color: #555555; line-height: 1.6; margin-top: 24px;">
+                        We recommend updating your password once you log in (if applicable).
+                    </p>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    `;
+
+    try {
+        const info = await transporter.sendMail({
+            from: `"${companyName}" <${process.env.SMTP_USER}>`,
+            to,
+            subject: 'Password Reset',
+            html
+        });
+        console.log(`📧 Password reset email sent to ${to}`);
+        return info;
+    } catch (error) {
+        console.error(`❌ Password reset email failed to ${to}:`, error.message);
+        throw error;
+    }
+}
+
 export default transporter;
+
