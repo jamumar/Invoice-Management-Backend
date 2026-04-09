@@ -132,7 +132,14 @@ export const getInvoices = async (req, res, next) => {
             where: {
                 ...(status && { status: status.toUpperCase() }),
             },
-            include: { customer: { select: { companyName: true, email: true, address: true, city: true, postcode: true, isConsignment: true } }, items: true },
+            include: { 
+                customer: { select: { companyName: true, email: true, address: true, city: true, postcode: true, isConsignment: true } }, 
+                items: {
+                    include: {
+                        product: { select: { productCode: true, description: true } }
+                    }
+                }
+            },
             orderBy: { createdAt: 'desc' },
         });
         console.log(`[Invoices] Fetching invoices for user: ${req.user.id}${status ? ` (Status: ${status})` : ''}`);
@@ -147,7 +154,14 @@ export const getInvoice = async (req, res, next) => {
     try {
         const invoice = await prisma.invoice.findFirst({
             where: { id: req.params.id },
-            include: { customer: true, items: true },
+            include: { 
+                customer: true, 
+                items: {
+                    include: {
+                        product: { select: { productCode: true, description: true } }
+                    }
+                }
+            },
         });
         if (!invoice) return next(new AppError('Invoice not found.', 404));
         res.json({ success: true, data: invoice });
@@ -361,7 +375,14 @@ export const downloadInvoice = async (req, res, next) => {
     try {
         const invoice = await prisma.invoice.findFirst({
             where: { id: req.params.id },
-            include: { customer: true, items: true },
+            include: { 
+                customer: true, 
+                items: {
+                    include: {
+                        product: { select: { productCode: true, description: true } }
+                    }
+                }
+            },
         });
 
         if (!invoice) return next(new AppError('Invoice not found.', 404));
@@ -462,25 +483,31 @@ export const downloadInvoice = async (req, res, next) => {
         // ─── Items Table ───────────────────────────────────────────────────
         const tableTop = 280;
         doc.rect(50, tableTop, 500, 25).fill('#111111');
-        doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold');
-        doc.text('DESCRIPTION', 60, tableTop + 9);
-        doc.text('QTY', 320, tableTop + 9, { width: 40, align: 'center' });
-        doc.text('PRICE', 370, tableTop + 9, { width: 80, align: 'right' });
-        doc.text('TOTAL', 460, tableTop + 9, { width: 80, align: 'right' });
+        doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold');
+        doc.text('DATE', 55, tableTop + 9);
+        doc.text('ITEM #', 110, tableTop + 9);
+        doc.text('DESCRIPTION', 200, tableTop + 9);
+        doc.text('QTY', 370, tableTop + 9, { width: 30, align: 'center' });
+        doc.text('PRICE', 410, tableTop + 9, { width: 60, align: 'right' });
+        doc.text('TOTAL', 480, tableTop + 9, { width: 60, align: 'right' });
 
         let currentY = tableTop + 30;
         invoice.items.forEach((item) => {
-            doc.fillColor('#111111').fontSize(9).font('Helvetica-Bold').text(item.name, 60, currentY);
-            if (item.description) {
-                doc.fontSize(8).font('Helvetica').fillColor('#888888').text(item.description, 60, currentY + 12);
-            }
+            const itemDate = item.date ? new Date(item.date).toLocaleDateString('en-GB') : new Date(invoice.createdAt).toLocaleDateString('en-GB');
+            const itemCode = item.product?.productCode || (item.name.includes(' - ') ? item.name.split(' - ')[0] : '—');
+            const itemDesc = item.product?.description || (item.name.includes(' - ') ? item.name.split(' - ').slice(1).join(' - ') : item.name);
+            
+            doc.fillColor('#111111').fontSize(7).font('Helvetica').text(itemDate, 55, currentY);
+            doc.font('Helvetica-Bold').text(itemCode, 110, currentY, { width: 85 });
+            doc.font('Helvetica').text(itemDesc, 200, currentY, { width: 160 });
 
-            const rowHeight = item.description ? 35 : 25;
-            doc.fillColor('#111111').fontSize(9).font('Helvetica');
-            doc.text(item.quantity.toString(), 320, currentY, { width: 40, align: 'center' });
-            doc.text(`£${item.unitPrice.toFixed(2)}`, 370, currentY, { width: 80, align: 'right' });
-            doc.text(`£${item.total.toFixed(2)}`, 460, currentY, { width: 80, align: 'right' });
+            doc.text(item.quantity.toString(), 370, currentY, { width: 30, align: 'center' });
+            doc.text(`£${item.unitPrice.toFixed(2)}`, 410, currentY, { width: 60, align: 'right' });
+            doc.text(`£${item.total.toFixed(2)}`, 480, currentY, { width: 60, align: 'right' });
 
+            const itemTextHeight = doc.heightOfString(itemDesc, { width: 160 });
+            const rowHeight = Math.max(25, itemTextHeight + 10);
+            
             currentY += rowHeight;
             doc.moveTo(50, currentY - 5).lineTo(550, currentY - 5).strokeColor('#EEEEEE').lineWidth(0.5).stroke();
         });
