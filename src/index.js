@@ -51,6 +51,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/assets', express.static('assets'));
 
 // ─── Request Logger ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {

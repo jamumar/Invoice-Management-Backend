@@ -132,6 +132,7 @@ model InvoiceItem {
   quantity    Int
   unitPrice   Float
   total       Float
+  date        DateTime?
   invoiceId   String
   productId   String?
   invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)

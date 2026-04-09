@@ -130,13 +130,16 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
                 if (mergedItems[key]) {
                     mergedItems[key].quantity += item.quantity;
                     mergedItems[key].total += item.total;
+                    // If multiple visits for same item, we can just keep the latest or use a range
+                    // Here we'll just keep the existing date if one is set
                 } else {
                     mergedItems[key] = {
                         name: item.name,
                         productId: item.productId,
                         unitPrice: item.unitPrice,
                         quantity: item.quantity,
-                        total: item.total
+                        total: item.total,
+                        date: visit.date // Store the visit date
                     };
                 }
             });
@@ -178,7 +181,8 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
                         quantity: i.quantity,
                         unitPrice: i.unitPrice,
                         total: i.total,
-                        productId: i.productId
+                        productId: i.productId,
+                        date: i.date // Pass the visit date here
                     }))
                 }
             }
