@@ -4,6 +4,8 @@ import {
     getConsignmentCustomers,
     getPendingVisits,
     logVisit,
+    updateVisit,
+    deleteVisit,
     generateInvoiceFromVisits,
     updateCustomerStock
 } from '../controllers/consignment.controller.js';
@@ -15,7 +17,9 @@ router.use(protect);
 router.get('/customers', getConsignmentCustomers);
 router.get('/customers/:customerId/pending', getPendingVisits);
 router.put('/customers/:id/stock', updateCustomerStock);
-router.post('/visit', logVisit);
+router.post('/visits', logVisit);
+router.patch('/visits/:id', updateVisit);
+router.delete('/visits/:id', deleteVisit);
 router.post('/invoice', generateInvoiceFromVisits);
 
 export default router;

@@ -241,3 +241,67 @@ export const updateCustomerStock = async (req, res, next) => {
         next(err);
     }
 };
+
+// PATCH /api/consignment/visits/:id
+export const updateVisit = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { date, nextVisit, notes, items } = req.body;
+
+        const existing = await prisma.consignmentVisit.findUnique({ where: { id } });
+        if (!existing) return next(new AppError('Visit not found.', 404));
+        if (existing.invoiced) return next(new AppError('Cannot edit an invoiced visit.', 400));
+
+        // Update the visit fields
+        const updated = await prisma.consignmentVisit.update({
+            where: { id },
+            data: {
+                ...(date && { date: new Date(date) }),
+                ...(nextVisit !== undefined && { nextVisit: nextVisit || null }),
+                ...(notes !== undefined && { notes: notes || null }),
+                // If items are provided, replace them entirely
+                ...(items && {
+                    items: {
+                        deleteMany: {},
+                        create: items.map(item => ({
+                            name: item.name,
+                            quantity: item.quantity,
+                            unitPrice: item.unitPrice,
+                            total: item.total,
+                            productId: item.productId || null
+                        }))
+                    }
+                })
+            },
+            include: { items: true }
+        });
+
+        console.log(`[Consignment] Visit ${id} updated`);
+        res.json({ success: true, data: updated });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// DELETE /api/consignment/visits/:id
+export const deleteVisit = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        const existing = await prisma.consignmentVisit.findUnique({
+            where: { id },
+            include: { items: true }
+        });
+        if (!existing) return next(new AppError('Visit not found.', 404));
+        if (existing.invoiced) return next(new AppError('Cannot delete an invoiced visit.', 400));
+
+        // Delete items first, then the visit
+        await prisma.consignmentItem.deleteMany({ where: { visitId: id } });
+        await prisma.consignmentVisit.delete({ where: { id } });
+
+        console.log(`[Consignment] Visit ${id} deleted`);
+        res.json({ success: true, message: 'Visit deleted successfully.' });
+    } catch (err) {
+        next(err);
+    }
+};
