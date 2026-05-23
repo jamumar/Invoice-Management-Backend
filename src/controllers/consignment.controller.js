@@ -11,9 +11,7 @@ export const getConsignmentCustomers = async (req, res, next) => {
                 consignmentStock: true,
                 consignmentVisits: {
                     include: {
-                        items: {
-                            select: { total: true }
-                        }
+                        items: true
                     },
                     orderBy: { date: 'desc' }
                 }
@@ -150,9 +148,13 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
         const tax = subtotal * 0.2;
         const total = subtotal + tax;
 
-        // Get last invoice number
+        // Get last invoice number starting with 'INV-' to avoid collisions with standard invoices (format '#001')
         const lastInvoice = await prisma.invoice.findFirst({
-            where: {},
+            where: {
+                invoiceNumber: {
+                    startsWith: 'INV-'
+                }
+            },
             orderBy: { createdAt: 'desc' },
         });
 
