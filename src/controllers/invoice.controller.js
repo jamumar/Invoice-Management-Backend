@@ -216,6 +216,12 @@ export const createInvoice = async (req, res, next) => {
         const customPricePromises = [];
         const stockUpdatePromises = [];
 
+        // Query all products in the invoice to check if we should update their stock
+        const productIds = items.map(item => item.productId).filter(Boolean);
+        const dbProducts = await prisma.product.findMany({
+            where: { id: { in: productIds } }
+        });
+
         items.forEach((item) => {
             if (item.productId) {
                 // Prepare custom price upsert
@@ -237,17 +243,20 @@ export const createInvoice = async (req, res, next) => {
                     })
                 );
 
-                // Prepare stock deduction
-                stockUpdatePromises.push(
-                    prisma.product.update({
-                        where: { id: item.productId },
-                        data: {
-                            stock: {
-                                decrement: item.quantity
+                // Prepare stock deduction only if addStock is enabled
+                const dbProduct = dbProducts.find(p => p.id === item.productId);
+                if (dbProduct && dbProduct.addStock) {
+                    stockUpdatePromises.push(
+                        prisma.product.update({
+                            where: { id: item.productId },
+                            data: {
+                                stock: {
+                                    decrement: item.quantity
+                                }
                             }
-                        }
-                    })
-                );
+                        })
+                    );
+                }
             }
         });
 
@@ -497,6 +506,24 @@ export const downloadInvoice = async (req, res, next) => {
             const itemCode = item.product?.productCode || (item.name.includes(' - ') ? item.name.split(' - ')[0] : '—');
             const itemDesc = item.product?.description || (item.name.includes(' - ') ? item.name.split(' - ').slice(1).join(' - ') : item.name);
             
+            const itemTextHeight = doc.heightOfString(itemDesc, { width: 160 });
+            const rowHeight = Math.max(25, itemTextHeight + 10);
+
+            // If drawing this item overflows the page, add a new page and redraw table headers
+            if (currentY + rowHeight > 760) {
+                doc.addPage();
+                currentY = 50;
+                doc.rect(50, currentY, 500, 25).fill('#111111');
+                doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold');
+                doc.text('DATE', 55, currentY + 9);
+                doc.text('ITEM #', 110, currentY + 9);
+                doc.text('DESCRIPTION', 200, currentY + 9);
+                doc.text('QTY', 370, currentY + 9, { width: 30, align: 'center' });
+                doc.text('PRICE', 410, currentY + 9, { width: 60, align: 'right' });
+                doc.text('TOTAL', 480, currentY + 9, { width: 60, align: 'right' });
+                currentY += 35;
+            }
+
             doc.fillColor('#111111').fontSize(7).font('Helvetica').text(itemDate, 55, currentY);
             doc.font('Helvetica-Bold').text(itemCode, 110, currentY, { width: 85 });
             doc.font('Helvetica').text(itemDesc, 200, currentY, { width: 160 });
@@ -505,14 +532,16 @@ export const downloadInvoice = async (req, res, next) => {
             doc.text(`£${item.unitPrice.toFixed(2)}`, 410, currentY, { width: 60, align: 'right' });
             doc.text(`£${item.total.toFixed(2)}`, 480, currentY, { width: 60, align: 'right' });
 
-            const itemTextHeight = doc.heightOfString(itemDesc, { width: 160 });
-            const rowHeight = Math.max(25, itemTextHeight + 10);
-            
             currentY += rowHeight;
             doc.moveTo(50, currentY - 5).lineTo(550, currentY - 5).strokeColor('#EEEEEE').lineWidth(0.5).stroke();
         });
 
         // ─── Footer Section ────────────────────────────────────────────────
+        // If there isn't enough vertical space for the footer block, move it to a new page
+        if (currentY > 580) {
+            doc.addPage();
+            currentY = 50;
+        }
         const footerStart = currentY + 20;
 
         // Payment Info (Left)

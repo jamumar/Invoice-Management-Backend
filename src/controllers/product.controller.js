@@ -52,7 +52,7 @@ export const getProduct = async (req, res, next) => {
 // POST /api/products
 export const createProduct = async (req, res, next) => {
     try {
-        const { productCode, name, description, unitPrice, unit, stock, categoryId } = req.body;
+        const { productCode, name, description, unitPrice, unit, stock, categoryId, addStock } = req.body;
         if (!name || unitPrice === undefined) return next(new AppError('Name and unit price are required.', 400));
 
         const product = await prisma.product.create({
@@ -63,6 +63,7 @@ export const createProduct = async (req, res, next) => {
                 unitPrice: parseFloat(unitPrice),
                 unit: unit || 'per project',
                 stock: stock !== undefined ? parseInt(stock, 10) : 0,
+                addStock: addStock !== undefined ? !!addStock : true,
                 userId: req.user.id,
                 categoryId: categoryId || null
             },
@@ -97,7 +98,7 @@ export const updateProduct = async (req, res, next) => {
         const existing = await prisma.product.findFirst({ where: { id: req.params.id } });
         if (!existing) return next(new AppError('Product not found.', 404));
 
-        const { productCode, name, description, unitPrice, unit, stock, categoryId } = req.body;
+        const { productCode, name, description, unitPrice, unit, stock, categoryId, addStock } = req.body;
 
         const data = {};
         if (productCode !== undefined) data.productCode = productCode;
@@ -106,6 +107,7 @@ export const updateProduct = async (req, res, next) => {
         if (unitPrice !== undefined) data.unitPrice = parseFloat(unitPrice);
         if (unit !== undefined) data.unit = unit;
         if (stock !== undefined) data.stock = parseInt(stock, 10);
+        if (addStock !== undefined) data.addStock = !!addStock;
         if (categoryId !== undefined) data.categoryId = categoryId === "" ? null : categoryId;
 
         const updated = await prisma.product.update({

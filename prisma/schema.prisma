@@ -92,6 +92,7 @@ model Product {
   userId           String
   unitPrice        Float
   stock            Int               @default(0)
+  addStock         Boolean           @default(true)
   categoryId       String?
   consignmentItems ConsignmentItem[]
   customPrices     CustomPrice[]
