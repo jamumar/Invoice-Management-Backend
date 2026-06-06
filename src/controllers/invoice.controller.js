@@ -606,8 +606,10 @@ export const getReportsAnalytics = async (req, res, next) => {
         const currentYear = now.getFullYear(); // Keep for revenue history
         const currentMonth = now.getMonth(); // Keep for revenue history
 
-        const targetMonth = (month !== undefined && month !== '') ? parseInt(month) : now.getMonth();
-        const targetYear = (year !== undefined && year !== '') ? parseInt(year) : now.getFullYear();
+        let targetMonth = (month !== undefined && month !== '') ? parseInt(month) : now.getMonth();
+        let targetYear = (year !== undefined && year !== '') ? parseInt(year) : now.getFullYear();
+        if (isNaN(targetMonth)) targetMonth = now.getMonth();
+        if (isNaN(targetYear)) targetYear = now.getFullYear();
 
         // 1. Fetch all invoices for statistics
         const invoices = await prisma.invoice.findMany({
