@@ -16,6 +16,7 @@ import { notFound } from './middleware/notFound.middleware.js';
 
 import { createServer } from 'http';
 import { init as initSocket } from './lib/socket.js';
+import { initEmailWorker } from './lib/emailQueue.js';
 
 dotenv.config();
 
@@ -23,8 +24,9 @@ const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
 
-// Initialize Socket.io
+// Initialize Socket.io & Email Worker Queue
 initSocket(httpServer);
+initEmailWorker();
 
 // ─── Middleware ─────────────────────────────────────────────────────────────
 const allowedOrigins = [

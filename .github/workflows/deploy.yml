@@ -24,4 +24,5 @@ jobs:
             npm install
             npx prisma generate
             npx prisma migrate deploy
+            sudo systemctl start redis-server.service || echo "Redis started or already running"
             pm2 reload invoice-backend

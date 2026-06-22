@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma.js';
-import { sendInvoiceEmail } from '../lib/mailer.js';
+import { addEmailToQueue } from '../lib/emailQueue.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { createInternalNotification } from './notification.controller.js';
 import { getIO } from '../lib/socket.js';
@@ -101,14 +101,12 @@ const checkAndSendReminders = async () => {
             if (shouldRemind) {
                 console.log(`[Reminders] Triggering reminder for ${inv.invoiceNumber}`);
                 
-                sendInvoiceEmail({
-                    to: inv.customer.email,
-                    customerName: inv.customer.companyName,
-                    invoice: inv,
-                    user: inv.user,
-                    isReminder: true
+                addEmailToQueue({
+                    invoiceId: inv.id,
+                    isReminder: true,
+                    userId: inv.user.id
                 }).catch(err => {
-                    console.error(`[Reminders Failed] Invoice ${inv.invoiceNumber}:`, err.message);
+                    console.error(`[Reminders Queue Failed] Invoice ${inv.invoiceNumber}:`, err.message);
                 });
 
                 await prisma.invoice.update({
@@ -361,13 +359,12 @@ export const sendInvoice = async (req, res, next) => {
 
         // Send email in sequence but WITHOUT awaiting it in the MAIN response cycle
         // This prevents 504 Gateway Timeouts if SMTP is slow
-        sendInvoiceEmail({
-            to: invoice.customer.email,
-            customerName: invoice.customer.companyName,
-            invoice,
-            user: req.user,
+        addEmailToQueue({
+            invoiceId: invoice.id,
+            isReminder: false,
+            userId: req.user.id,
         }).catch(err => {
-            console.error(`[Background Email Failed] Invoice ${invoice.invoiceNumber}:`, err.message);
+            console.error(`[Background Email Queue Failed] Invoice ${invoice.invoiceNumber}:`, err.message);
         });
 
         res.json({

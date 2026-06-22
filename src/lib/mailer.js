@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -7,30 +7,48 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config();
 
-// ─── Create Transporter ─────────────────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
-    connectionTimeout: 10000, // 10 seconds
-    greetingTimeout: 5000,
-    socketTimeout: 30000,
-});
-
-// ─── Verify Connection on Start ─────────────────────────────────────────────
-transporter.verify((error) => {
-    if (error) {
-        console.warn('⚠️  Email transporter not configured:', error.message);
-    } else {
-        console.log('📧  Email transporter ready');
-    }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Helper to check connection/config on start.
+ * Since Resend is an HTTP-based service, we just verify the API key is present.
+ */
+if (!process.env.RESEND_API_KEY) {
+    console.warn('⚠️  RESEND_API_KEY is not defined in environment variables.');
+} else {
+    console.log('📧  Resend email client initialized');
+}
+
+/**
+ * General helper to send emails via Resend.
+ */
+export async function sendMailViaResend({ to, subject, html, cc }) {
+    const companyName = 'novaconsumables';
+    const senderEmail = process.env.SENDER_EMAIL || 'accounts@novaconsumables.co.uk';
+
+    try {
+        const { data, error } = await resend.emails.send({
+            from: `"${companyName}" <${senderEmail}>`,
+            to: Array.isArray(to) ? to : [to],
+            cc: cc ? (Array.isArray(cc) ? cc : [cc]) : undefined,
+            subject,
+            html,
+        });
+
+        if (error) {
+            console.error(`❌ Resend API error:`, error);
+            throw new Error(error.message || 'Failed to send email via Resend');
+        }
+
+        console.log(`📧 Email sent successfully via Resend: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error(`❌ Email failed to ${to}:`, error.message);
+        throw error;
+    }
+}
 
 /**
  * Sends an invoice email to a customer.
@@ -72,6 +90,9 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
     // Generate a token for the download link (valid for 30 days to match the invoice)
     const downloadToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
+    // Use absolute URL from environment for static assets
+    const logoUrl = `${process.env.BACKEND_URL || 'http://localhost:5000'}/assets/logo.jpeg`;
+
     const html = `
     <!DOCTYPE html>
     <html>
@@ -85,7 +106,7 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
             <tr>
                 <td style="background-color: #111111; padding: 32px 40px; text-align: center;">
                     <div style="margin-bottom: 0;">
-                        <img src="cid:logo" alt="Logo" width="56" style="display: block; margin: 0 auto; border-radius: 14px;" />
+                        <img src="${logoUrl}" alt="Logo" width="56" style="display: block; margin: 0 auto; border-radius: 14px;" />
                     </div>
                     <p style="color: #b5b5b5; margin: 4px 0 0; font-size: 12px; font-family: 'Roboto', sans-serif;">${companyEmail}</p>
                 </td>
@@ -202,31 +223,18 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
     </html>
     `;
 
-    try {
-        const info = await transporter.sendMail({
-            from: `"${companyName}" <${process.env.SMTP_USER}>`,
-            to,
-            cc: isReminder ? undefined : companyEmail,
-            subject: `${isReminder ? 'PAYMENT REMINDER: ' : ''}Invoice ${invoice.invoiceNumber} from ${companyName}`,
-            html,
-            attachments: [
-                {
-                    filename: 'logo.jpeg',
-                    path: path.resolve(__dirname, '../../assets/logo.jpeg'),
-                    cid: 'logo' // same cid value as in the html img src
-                }
-            ]
-        });
-        console.log(`📧 Email sent: ${info.messageId} to ${to} (CC: ${isReminder ? 'None' : companyEmail})`);
-        return info;
-    } catch (error) {
-        console.error(`❌ Email failed to ${to}:`, error.message);
-        throw error;
-    }
+    return sendMailViaResend({
+        to,
+        cc: isReminder ? undefined : companyEmail,
+        subject: `${isReminder ? 'PAYMENT REMINDER: ' : ''}Invoice ${invoice.invoiceNumber} from ${companyName}`,
+        html,
+    });
 }
 
+/**
+ * Sends a password reset email.
+ */
 export async function sendPasswordResetEmail({ to, newPassword }) {
-    const companyName = 'novaconsumables';
     const html = `
     <!DOCTYPE html>
     <html>
@@ -253,20 +261,9 @@ export async function sendPasswordResetEmail({ to, newPassword }) {
     </html>
     `;
 
-    try {
-        const info = await transporter.sendMail({
-            from: `"${companyName}" <${process.env.SMTP_USER}>`,
-            to,
-            subject: 'Password Reset',
-            html
-        });
-        console.log(`📧 Password reset email sent to ${to}`);
-        return info;
-    } catch (error) {
-        console.error(`❌ Password reset email failed to ${to}:`, error.message);
-        throw error;
-    }
+    return sendMailViaResend({
+        to,
+        subject: 'Password Reset',
+        html,
+    });
 }
-
-export default transporter;
-
