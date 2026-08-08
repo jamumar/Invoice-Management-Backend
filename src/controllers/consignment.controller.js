@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { addEmailToQueue } from '../lib/emailQueue.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { createInternalNotification } from './notification.controller.js';
 
@@ -177,6 +178,7 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
                 tax,
                 total,
                 isConsignment: true,
+                sentAt: new Date(),
                 items: {
                     create: invoiceItems.map(i => ({
                         name: i.name,
@@ -187,7 +189,8 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
                         date: i.date // Pass the visit date here
                     }))
                 }
-            }
+            },
+            include: { customer: true, items: true }
         });
 
         // Mark visits as invoiced
@@ -195,6 +198,17 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
             where: { id: { in: visitIds } },
             data: { invoiced: true, invoiceId: invoice.id }
         });
+
+        // Dispatch email to customer background queue if customer has an email address
+        if (invoice.customer && invoice.customer.email) {
+            addEmailToQueue({
+                invoiceId: invoice.id,
+                isReminder: false,
+                userId: req.user.id,
+            }).catch(err => {
+                console.error(`[Consignment Email Queue Failed] Invoice ${invoice.invoiceNumber}:`, err.message);
+            });
+        }
 
         // Create Notification
         await createInternalNotification({
@@ -205,7 +219,7 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
             invoiceId: invoice.id
         });
 
-        console.log(`[Consignment] Generated invoice ${invoice.invoiceNumber} from ${visits.length} visits`);
+        console.log(`[Consignment] Generated invoice ${invoice.invoiceNumber} from ${visits.length} visits (Email queued to: ${invoice.customer?.email || 'N/A'})`);
         res.status(201).json({ success: true, data: invoice });
     } catch (err) {
         next(err);

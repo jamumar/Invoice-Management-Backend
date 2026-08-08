@@ -69,8 +69,11 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
     const itemsHtml = invoice.items
         .map(
             (item) => {
-                const itemCode = item.product?.productCode || (item.name.includes(' - ') ? item.name.split(' - ')[0] : '—');
-                const itemDesc = item.product?.description || (item.name.includes(' - ') ? item.name.split(' - ').slice(1).join(' - ') : item.name);
+                const nameStr = item.name || '';
+                const itemCode = item.product?.productCode || (nameStr.includes(' - ') ? nameStr.split(' - ')[0] : (nameStr || '—'));
+                const itemDesc = item.product?.description || (nameStr.includes(' - ') ? nameStr.split(' - ').slice(1).join(' - ') : nameStr);
+                const unitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : parseFloat(item.unitPrice || 0);
+                const itemTotal = typeof item.total === 'number' ? item.total : parseFloat(item.total || 0);
                 
                 return `
                 <tr style="border-bottom: 1px solid #f0f0f0;">
@@ -78,9 +81,9 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
                         <div style="font-weight: 700; margin-bottom: 2px;">${itemCode}</div>
                         <div style="font-size: 12px; color: #555555;">${itemDesc}</div>
                     </td>
-                    <td style="padding: 12px 4px; text-align: center; color: #555555; font-size: 13px; font-family: 'Roboto', sans-serif;">${item.quantity}</td>
-                    <td style="padding: 12px 4px; text-align: right; color: #555555; font-size: 13px; font-family: 'Roboto', sans-serif;">£${item.unitPrice.toFixed(2)}</td>
-                    <td style="padding: 12px 4px; text-align: right; font-weight: 700; color: #111111; font-size: 13px; font-family: 'Roboto', sans-serif;">£${item.total.toFixed(2)}</td>
+                    <td style="padding: 12px 4px; text-align: center; color: #555555; font-size: 13px; font-family: 'Roboto', sans-serif;">${item.quantity || 1}</td>
+                    <td style="padding: 12px 4px; text-align: right; color: #555555; font-size: 13px; font-family: 'Roboto', sans-serif;">£${unitPrice.toFixed(2)}</td>
+                    <td style="padding: 12px 4px; text-align: right; font-weight: 700; color: #111111; font-size: 13px; font-family: 'Roboto', sans-serif;">£${itemTotal.toFixed(2)}</td>
                 </tr>
                 `;
             }
