@@ -90,8 +90,8 @@ export async function sendInvoiceEmail({ to, customerName, invoice, user, isRemi
         )
         .join('');
 
-    // Generate a token for the download link (valid for 30 days to match the invoice)
-    const downloadToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    // Generate a token for the download link (no expiration to allow indefinite access)
+    const downloadToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
 
     // Use absolute URL from environment for static assets
     const logoUrl = `${process.env.BACKEND_URL || 'http://localhost:5000'}/assets/logo.jpeg`;
