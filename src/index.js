@@ -42,7 +42,12 @@ app.use(cors({
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
 
-        if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('tauri://')) {
+        const isAllowed = allowedOrigins.indexOf(origin) !== -1 || 
+                          origin.startsWith('tauri://') || 
+                          origin.endsWith('novaconsumables.co.uk') || 
+                          origin.includes('204.168.141.143');
+
+        if (isAllowed) {
             callback(null, true);
         } else {
             console.log('CORS blocked origin:', origin);
