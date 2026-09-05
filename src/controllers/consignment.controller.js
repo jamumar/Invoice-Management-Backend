@@ -149,22 +149,33 @@ export const generateInvoiceFromVisits = async (req, res, next) => {
         const tax = subtotal * 0.2;
         const total = subtotal + tax;
 
-        // Get last invoice number starting with 'INV-' to avoid collisions with standard invoices (format '#001')
-        const lastInvoice = await prisma.invoice.findFirst({
+        // Get all consignment invoice numbers for current year
+        const currentYear = new Date().getFullYear();
+        const prefix = `INV-${currentYear}-`;
+        const existingConsignment = await prisma.invoice.findMany({
             where: {
                 invoiceNumber: {
-                    startsWith: 'INV-'
+                    startsWith: prefix
                 }
             },
-            orderBy: { createdAt: 'desc' },
+            select: { invoiceNumber: true }
         });
 
         let lastNum = 0;
-        if (lastInvoice && lastInvoice.invoiceNumber.includes('-')) {
-            const parts = lastInvoice.invoiceNumber.split('-');
-            lastNum = parseInt(parts[parts.length - 1]);
+        for (const inv of existingConsignment) {
+            const parts = inv.invoiceNumber.split('-');
+            const num = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(num) && num > lastNum) {
+                lastNum = num;
+            }
         }
-        const nextNum = `INV-${new Date().getFullYear()}-${String(lastNum + 1).padStart(3, '0')}`;
+
+        let nextCandidateNum = lastNum + 1;
+        let nextNum = `${prefix}${String(nextCandidateNum).padStart(3, '0')}`;
+        while (await prisma.invoice.findUnique({ where: { invoiceNumber: nextNum } })) {
+            nextCandidateNum++;
+            nextNum = `${prefix}${String(nextCandidateNum).padStart(3, '0')}`;
+        }
 
         const invoice = await prisma.invoice.create({
             data: {

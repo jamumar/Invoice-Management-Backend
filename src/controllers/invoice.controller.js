@@ -12,10 +12,37 @@ const __dirname = path.dirname(__filename);
 
 // ─── Helper: generate invoice number ─────────────────────────────────────────
 const generateInvoiceNumber = async () => {
-    // Generate Invoice Number (Format: #001)
-    const count = await prisma.invoice.count();
-    const invoiceNumber = `#${(count + 1).toString().padStart(3, '0')}`;
-    return invoiceNumber;
+    // Find all existing standard invoices formatted as '#001', '#059', etc.
+    const existingInvoices = await prisma.invoice.findMany({
+        where: {
+            invoiceNumber: {
+                startsWith: '#'
+            }
+        },
+        select: { invoiceNumber: true }
+    });
+
+    let maxNum = 0;
+    for (const inv of existingInvoices) {
+        const match = inv.invoiceNumber.match(/^#(\d+)$/);
+        if (match) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num) && num > maxNum) {
+                maxNum = num;
+            }
+        }
+    }
+
+    let nextNum = maxNum + 1;
+    let candidate = `#${nextNum.toString().padStart(3, '0')}`;
+
+    // Safety loop: ensure candidate number is genuinely free in the database
+    while (await prisma.invoice.findUnique({ where: { invoiceNumber: candidate } })) {
+        nextNum++;
+        candidate = `#${nextNum.toString().padStart(3, '0')}`;
+    }
+
+    return candidate;
 };
 
 // ─── Helper: check for overdue invoices and create notifications ─────────────
@@ -191,24 +218,43 @@ export const createInvoice = async (req, res, next) => {
 
         const subtotal = invoiceItems.reduce((sum, i) => sum + i.total, 0);
         const taxAmount = parseFloat(tax || 0);
-        const total = subtotal + taxAmount;
-        const invoiceNumber = await generateInvoiceNumber();
+        let invoice;
+        let attempts = 0;
+        while (!invoice && attempts < 5) {
+            attempts++;
+            const invoiceNumber = await generateInvoiceNumber();
 
-        const invoice = await prisma.invoice.create({
-            data: {
-                invoiceNumber,
-                purchaseOrder: purchaseOrder || null,
-                userId: req.user.id,
-                customerId,
-                dueDate: new Date(dueDate || Date.now() + 30 * 24 * 60 * 60 * 1000),
-                notes,
-                subtotal,
-                tax: taxAmount,
-                total,
-                items: { create: invoiceItems },
-            },
-            include: { customer: true, items: true },
-        });
+            try {
+                invoice = await prisma.invoice.create({
+                    data: {
+                        invoiceNumber,
+                        purchaseOrder: purchaseOrder || null,
+                        userId: req.user.id,
+                        customerId,
+                        dueDate: new Date(dueDate || Date.now() + 30 * 24 * 60 * 60 * 1000),
+                        notes,
+                        subtotal,
+                        tax: taxAmount,
+                        total,
+                        items: { create: invoiceItems },
+                    },
+                    include: { customer: true, items: true },
+                });
+            } catch (createErr) {
+                // If unique constraint failed on invoiceNumber (Prisma code P2002), retry with next number
+                const isCollision = createErr.code === 'P2002' && (
+                    createErr.meta?.target?.includes('invoiceNumber') ||
+                    (Array.isArray(createErr.meta?.target) && createErr.meta.target.includes('invoiceNumber')) ||
+                    String(createErr.message).includes('invoiceNumber')
+                );
+
+                if (isCollision && attempts < 5) {
+                    console.warn(`[Invoices] Invoice number collision on ${invoiceNumber}, retrying with next number (attempt ${attempts})...`);
+                    continue;
+                }
+                throw createErr;
+            }
+        }
 
         // ─── Upsert Custom Prices & Update Stock ───────────────────────────────
         const customPricePromises = [];
