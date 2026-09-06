@@ -218,6 +218,7 @@ export const createInvoice = async (req, res, next) => {
 
         const subtotal = invoiceItems.reduce((sum, i) => sum + i.total, 0);
         const taxAmount = parseFloat(tax || 0);
+        const total = subtotal + taxAmount;
         let invoice;
         let attempts = 0;
         while (!invoice && attempts < 5) {
